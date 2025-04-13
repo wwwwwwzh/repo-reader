@@ -2,3 +2,6 @@ venv/
 all_files*/
 *.png
 *.dot
+__pycache__/
+*.py[cod]
+*$py.class

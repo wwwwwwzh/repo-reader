@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Code Structure Viewer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            line-height: 1.6;
+            background-color: #f5f5f5;
+        }
+        header {
+            background-color: #333;
+            color: white;
+            padding: 10px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+            min-height: calc(100vh - 100px);
+        }
+        .repo-info {
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #eee;
+        }
+        .repo-title {
+            font-size: 1.5em;
+            font-weight: bold;
+        }
+        .repo-url {
+            color: #666;
+            margin-top: 5px;
+            word-break: break-all;
+        }
+        .tree-container {
+            display: flex;
+        }
+        .tree-nav {
+            width: 25%;
+            border-right: 1px solid #eee;
+            padding-right: 20px;
+            overflow-y: auto;
+            max-height: 800px;
+        }
+        .code-preview {
+            width: 75%;
+            padding-left: 20px;
+            overflow-y: auto;
+            max-height: 800px;
+        }
+        .node {
+            margin-left: 20px;
+            position: relative;
+        }
+        .node-root {
+            margin-left: 0;
+        }
+        .caret {
+            cursor: pointer;
+            user-select: none;
+            position: relative;
+            padding: 5px 0;
+            display: block;
+        }
+        .caret::before {
+            content: "⊞";
+            color: #333;
+            display: inline-block;
+            margin-right: 6px;
+        }
+        .caret-down::before {
+            content: "⊟";
+        }
+        .nested {
+            display: none;
+        }
+        .active {
+            display: block;
+        }
+        pre {
+            background-color: #f9f9f9;
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            max-height: 500px;
+        }
+        code {
+            font-family: Consolas, Monaco, 'Andale Mono', monospace;
+            font-size: 14px;
+        }
+        .breadcrumb {
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        .breadcrumb a {
+            color: #333;
+            text-decoration: none;
+        }
+        .breadcrumb a:hover {
+            text-decoration: underline;
+        }
+        .active-node {
+            background-color: #e0f7fa;
+            border-radius: 3px;
+        }
+        .code-type {
+            color: #666;
+            font-size: 0.8em;
+            margin-bottom: 5px;
+        }
+        .function-name {
+            font-weight: bold;
+        }
+        .file-path {
+            font-size: 0.9em;
+            color: #666;
+            margin-top: 5px;
+        }
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(0, 0, 0, 0.1);
+            border-radius: 50%;
+            border-top-color: #09f;
+            animation: spin 1s ease-in-out infinite;
+            margin: 0 auto;
+        }
+        .segment-type {
+            font-weight: bold;
+            font-size: 0.9em;
+            color: #555;
+            margin-right: 5px;
+        }
+
+        .node[data-type="segment"] {
+            margin-left: 30px;
+        }
+
+        .node[data-segment-type="code"] > span {
+            color: #0d47a1;
+        }
+
+        .node[data-segment-type="call"] > span {
+            color: #ff0000;
+        }
+
+        .node[data-segment-type="comment"] > span {
+            color: #6d4c41;
+            font-style: italic;
+        }
+
+        .segment-details {
+            padding: 15px;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+            border: 1px solid #e0e0e0;
+        }
+
+        .segment-details.segment-code {
+            background-color: #e3f2fd;
+            border-color: #bbdefb;
+        }
+
+        .segment-details.segment-call {
+            background-color: #e8f5e9;
+            border-color: #c8e6c9;
+        }
+
+        .segment-details.segment-comment {
+            background-color: #f3e5f5;
+            border-color: #e1bee7;
+        }
+
+        .target-function-info {
+            margin-top: 15px;
+            padding: 10px;
+            background-color: #f1f8e9;
+            border-left: 4px solid #7cb342;
+            border-radius: 4px;
+        }
+
+        .function-details {
+            margin-bottom: 20px;
+            padding: 15px;
+            background-color: #f5f5f5;
+            border-radius: 5px;
+            border: 1px solid #e0e0e0;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .header-nav a {
+            color: white;
+            text-decoration: none;
+            margin-left: 15px;
+        }
+        .header-nav a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Code Structure Viewer</h1>
+        <div class="header-nav">
+            <a href="/code/">Home</a>
+            <a href="/code/function-tree/{{ repo_hash }}">Function Tree</a>
+        </div>
+    </header>
+    
+    <div class="container">
+        <div class="breadcrumb">
+            <a href="/code/">Home</a> &gt; 
+            <span>{{ repo_name }}</span>
+        </div>
+        
+        <div class="repo-info" data-repo-hash="{{ repo_hash }}">
+            <div class="repo-title">{{ repo_name }}</div>
+            <div class="repo-url">{{ repo_url }}</div>
+        </div>
+        
+        <div class="tree-container">
+            <div class="tree-nav" id="tree">
+                <div id="loading-tree" class="loading"></div>
+                <p>Select a function from the list to view its structure.</p>
+                <div id="function-list">
+                </div>
+            </div>
+            <div class="code-preview" id="code-preview">
+                <div class="code-preview-content">
+                    <p>Select a function from the tree to view its code.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const repoHash = document.querySelector('.repo-info').dataset.repoHash;
+            loadInitialFunctions(repoHash);
+            
+            // Get repository information
+            fetch(`/code/api/repository/${repoHash}`)
+                .then(response => response.json())
+                .then(data => {
+                    updateRepositoryInfo(data);
+                })
+                .catch(error => {
+                    console.error('Error fetching repository info:', error);
+                });
+        });
+
+        function updateRepositoryInfo(data) {
+            const repoInfo = document.querySelector('.repo-info');
+            const parsedDate = new Date(data.parsed_at);
+            
+            // Add additional repository information if needed
+            const entryPointsDiv = document.createElement('div');
+            entryPointsDiv.classList.add('entry-points');
+            entryPointsDiv.innerHTML = '<strong>Entry Points:</strong> ' + 
+                (data.entry_points?.length ? data.entry_points.join(', ') : 'None specified');
+            
+            repoInfo.appendChild(entryPointsDiv);
+        }
+
+        async function loadInitialFunctions(repoHash) {
+            try {
+                // Show loading
+                const functionList = document.getElementById('function-list');
+                functionList.innerHTML = '<div class="loading"></div>';
+                
+                // Load entry functions and all functions
+                const response = await fetch(`/code/api/functions/${repoHash}/entries`);
+                const functions = await response.json();
+                
+                // Remove loading
+                functionList.innerHTML = '';
+                
+                if (functions.length === 0) {
+                    functionList.innerHTML = '<p>No functions found for this repository.</p>';
+                    return;
+                }
+                
+                // Build the function list
+                const listElement = document.createElement('ul');
+                
+                functions.forEach(func => {
+                    const item = document.createElement('li');
+                    const link = document.createElement('a');
+                    link.href = "#";
+                    link.textContent = `${func.name} (${func.module_name})`;
+                    link.onclick = function(e) {
+                        e.preventDefault();
+                        loadFunctionDetails(repoHash, func.id);
+                    };
+                    
+                    item.appendChild(link);
+                    listElement.appendChild(item);
+                });
+                
+                functionList.appendChild(listElement);
+            } catch (error) {
+                console.error('Error loading functions:', error);
+                document.getElementById('function-list').innerHTML = 
+                    '<p>Error loading function data. Please try again later.</p>';
+            }
+        }
+
+        async function loadFunctionDetails(repoHash, functionId) {
+            try {
+                // Show loading
+                const codePreview = document.getElementById('code-preview');
+                codePreview.innerHTML = '<div class="loading"></div>';
+                
+                // Fetch function details
+                const response = await fetch(`/code/api/functions/${repoHash}/${functionId}`);
+                const func = await response.json();
+                
+                // Build content
+                let content = `
+                    <h2>${func.name}</h2>
+                    <p class="file-path">${func.full_name}</p>
+                    <p>File: ${func.file_path}</p>
+                    <p>Lines: ${func.lineno} - ${func.end_lineno}</p>
+                `;
+                
+                // Add segments
+                if (func.segments && func.segments.length > 0) {
+                    content += '<h3>Function Segments</h3>';
+                    
+                    func.segments.forEach(segment => {
+                        content += `
+                            <div class="segment segment-${segment.type}">
+                                <div class="segment-header">${segment.type.toUpperCase()} - Line ${segment.lineno}</div>
+                                <pre><code>${escapeHTML(segment.content)}</code></pre>
+                        `;
+                        
+                        // For call segments, add target
+                        if (segment.type === 'call' && segment.target_function) {
+                            const target = segment.target_function;
+                            content += `
+                                <div class="segment-target">
+                                    <p>Calls: ${target.name} (${target.full_name})</p>
+                                    <p>File: ${target.file_path}</p>
+                                </div>
+                            `;
+                        }
+                        
+                        content += '</div>';
+                    });
+                } else {
+                    content += '<p>No segments available for this function.</p>';
+                }
+                
+                codePreview.innerHTML = content;
+            } catch (error) {
+                console.error('Error loading function details:', error);
+                document.getElementById('code-preview').innerHTML = 
+                    '<p>Error loading function details. Please try again.</p>';
+            }
+        }
+
+        // Helper function to escape HTML
+        function escapeHTML(str) {
+            return str
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+    </script>
+    <script src="/code/static/js/tree.js"></script>
+</body>
+</html>

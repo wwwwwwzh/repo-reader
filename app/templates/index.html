@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AST Viewer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 8px;
+            box-sizing: border-box;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+        }
+        button {
+            padding: 10px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+            border-radius: a4px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #status {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            display: none;
+            background-color: #f9f9f9;
+            border-radius: 3px;
+        }
+        .repo-list {
+            margin-top: 30px;
+            border-top: 1px solid #eee;
+            padding-top: 20px;
+        }
+        .repo-item {
+            padding: 12px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            background-color: #f9f9f9;
+            transition: background-color 0.2s;
+        }
+        .repo-item:hover {
+            background-color: #f0f0f0;
+        }
+        .repo-item a {
+            text-decoration: none;
+            color: #333;
+            display: block;
+        }
+        .repo-name {
+            font-weight: bold;
+            font-size: 1.1em;
+        }
+        .repo-url {
+            color: #666;
+            font-size: 0.9em;
+            margin-top: 3px;
+        }
+        .repo-date {
+            color: #999;
+            font-size: 0.8em;
+            margin-top: 3px;
+        }
+        .repo-actions {
+            margin-top: 8px;
+            display: flex;
+            gap: 10px;
+        }
+        .btn {
+            display: inline-block;
+            padding: 4px 8px;
+            background-color: #f0f0f0;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            text-decoration: none;
+            color: #333;
+            font-size: 0.9em;
+            transition: background-color 0.2s;
+        }
+        .btn:hover {
+            background-color: #e0e0e0;
+        }
+        h1, h2 {
+            color: #333;
+        }
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(0, 0, 0, 0.1);
+            border-left-color: #09f;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 8px;
+        }
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Code Repository AST Viewer</h1>
+        
+        <form id="repo-form">
+            <div class="form-group">
+                <label for="repo_url">Repository URL:</label>
+                <input type="text" id="repo_url" name="repo_url" placeholder="https://github.com/username/repo.git" required>
+            </div>
+            
+            <div class="form-group">
+                <label>Entry Points:</label>
+                <div id="entry-points">
+                    <input type="text" name="entry_points[]" placeholder="e.g., main.py">
+                </div>
+                <button type="button" id="add-entry-point">Add Another Entry Point</button>
+            </div>
+            
+            <button type="submit">Process Repository</button>
+        </form>
+        
+        <div id="status"></div>
+        
+        <div class="repo-list">
+            <h2>Available Repositories</h2>
+            {% if repositories %}
+                {% for repo in repositories %}
+                <div class="repo-item">
+                    <a href="/code/tree/{{ repo.id }}">
+                        <div class="repo-name">{{ repo.url.split('/')[-1].replace('.git', '') }}</div>
+                        <div class="repo-url">{{ repo.url }}</div>
+                        <div class="repo-date">Parsed: {{ repo.parsed_at.strftime('%Y-%m-%d %H:%M:%S') }}</div>
+                    </a>
+                    <div class="repo-actions">
+                        <a href="/code/tree/{{ repo.id }}" class="btn btn-sm">AST Tree</a>
+                        <a href="/code/function-tree/{{ repo.id }}" class="btn btn-sm">Function Tree</a>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <p>No repositories available. Add a repository using the form above.</p>
+            {% endif %}
+        </div>
+    </div>
+    
+    <script>
+        document.getElementById('add-entry-point').addEventListener('click', function() {
+            const container = document.getElementById('entry-points');
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.name = 'entry_points[]';
+            input.placeholder = 'e.g., file.py';
+            container.appendChild(input);
+        });
+        
+        document.getElementById('repo-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const form = this;
+            const statusDiv = document.getElementById('status');
+            statusDiv.style.display = 'block';
+            statusDiv.innerHTML = '<div class="loading"></div> Processing repository...';
+            
+            const formData = new FormData(form);
+            
+            fetch('/code/', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.task_id) {
+                    if (data.task_id === "existing") {
+                        statusDiv.innerHTML = 'Repository already exists in the database.';
+                        statusDiv.innerHTML += '<p>View the tree at <a href="/code/tree/' + data.repo_hash + '">Tree View</a></p>';
+                        
+                        // Auto-redirect after 2 seconds
+                        setTimeout(function() {
+                            window.location.href = '/code/tree/' + data.repo_hash;
+                        }, 2000);
+                    } else {
+                        statusDiv.innerHTML = 'Repository is being processed. Task ID: ' + data.task_id;
+                        statusDiv.innerHTML += '<p>Please wait while the repository is processed. The page will refresh automatically when complete.</p>';
+                        
+                        // Poll for task completion every 3 seconds
+                        checkTaskStatus(data.task_id);
+                    }
+                } else if (data.error) {
+                    statusDiv.innerHTML = 'Error: ' + data.error;
+                }
+            })
+            .catch(error => {
+                statusDiv.textContent = 'Error: ' + error.message;
+            });
+        });
+        
+        function checkTaskStatus(taskId) {
+            // In a production app, you'd implement a proper task status endpoint
+            // For now, we'll just refresh the page every 5 seconds to check for the new repo
+            setTimeout(function() {
+                window.location.reload();
+            }, 5000);
+        }
+    </script>
+</body>
+</html>

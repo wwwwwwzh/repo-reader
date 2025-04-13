@@ -1,0 +1,4 @@
+venv/
+all_files*/
+*.png
+*.dot

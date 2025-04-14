@@ -5,3 +5,5 @@ all_files*/
 __pycache__/
 *.py[cod]
 *$py.class
+.env
+scratch.*

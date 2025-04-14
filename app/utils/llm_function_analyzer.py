@@ -1,0 +1,337 @@
+#!/usr/bin/env python3
+"""
+LLM Function Analyzer - Uses Deepseek API to analyze Python functions
+
+This module handles sending functions to the Deepseek API for analysis and parsing
+the response into structured data. It includes slot filling to ensure all required
+information is present in the response.
+"""
+
+import json
+import requests
+import logging
+import time
+import re
+import os
+from typing import Dict, List, Optional, Any, Tuple
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+# Deepseek API Configuration
+# Note: You should set these via environment variables in production
+DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions"
+DEEPSEEK_API_KEY = None  # Should be set via environment variable
+
+class SlotFillingError(Exception):
+    """Exception raised when required slots are missing in LLM response"""
+    pass
+
+class LLMRequestError(Exception):
+    """Exception raised when there is an error in the LLM API request"""
+    pass
+
+def set_api_key(api_key: str) -> None:
+    """Set the Deepseek API key"""
+    global DEEPSEEK_API_KEY
+    DEEPSEEK_API_KEY = api_key
+    logging.info(f"{DEEPSEEK_API_KEY=}")
+
+def analyze_function(
+    function_content: str, 
+    function_name_full: str, 
+    max_retries: int = 1
+) -> Dict[str, Any]:
+    """
+    Send a function to the Deepseek API for analysis
+    
+    Args:
+        function_content: The complete source code of the function
+        function_name: The name of the function
+        file_path: Path to the source file containing the function
+        max_retries: Maximum number of retry attempts
+    
+    Returns:
+        Dict containing the structured analysis
+    
+    Raises:
+        LLMRequestError: If there is an error in the LLM API request
+        SlotFillingError: If required slots are missing from the response
+    """
+    if not DEEPSEEK_API_KEY:
+        raise ValueError("Deepseek API key not set. Call set_api_key() first.")
+    
+    # Build the prompt
+    logging.info(function_name_full)
+    prompt = build_analysis_prompt(function_content, function_name_full)
+    
+    # Make the request with retries
+    for attempt in range(max_retries):
+        try:
+            response = call_deepseek_api(prompt)
+            
+            # Parse and validate the response
+            analysis = parse_llm_response(response)
+            logging.info(f"{analysis=}")
+            
+            analysis['function_name'] = function_name_full
+            
+            # Ensure all required fields are present
+            validate_slots(analysis)
+
+            return analysis
+            
+        except (LLMRequestError, SlotFillingError, json.JSONDecodeError) as e:
+            logger.warning(f"Attempt {attempt+1}/{max_retries} failed: {str(e)}")
+            if attempt == max_retries - 1:
+                # This was the last attempt, re-raise the exception
+                raise
+            # Wait before retrying (exponential backoff)
+            time.sleep(2 ** attempt)
+    
+    # This should never be reached due to the re-raise above
+    raise RuntimeError("Unexpected code path in analyze_function")
+
+def build_analysis_prompt(function_content: str, function_name_full: str) -> str:
+    """
+    Build the prompt for the LLM analysis
+    
+    Args:
+        function_content: The full source code of the function
+        function_name_full: The full module name of the function
+    
+    Returns:
+        The complete prompt to send to the LLM
+    """
+    prompt = """
+Analyze the following Python function and provide a structured analysis. Your analysis must include all of the following components:
+
+1. Short Description: Describe the function's purpose in 10 words or fewer
+2. Input/Output Description: Describe the inputs and outputs of the function in 50 words or fewer
+3. Long Description: Provide a more detailed explanation of what the function does in 50 words or fewer
+4. Functional Components: Identify 3 to 5 logical non overlapping segments of the function and for each provide:
+   - Start line number
+   - End line number
+   - Short description (10 words or fewer)
+   - Long description (50 words or fewer)
+
+Format your response using this exact JSON structure:
+```json
+{{
+  "short_description": "",
+  "input_output_description": "",
+  "long_description": "",
+  "components": [
+    {{
+      "start_line": 0,
+      "end_line": 0,
+      "short_description": "",
+      "long_description": ""
+    }}
+  ]
+}}
+```
+
+The line numbers should be relative to the beginning of the function (the def line is line 1).
+
+Here is the function to analyze:
+Function full module name: {function_name_full}
+```python
+{function}
+```
+    """.strip().format(function=function_content,function_name_full=function_name_full)
+    
+    return prompt
+
+def call_deepseek_api(prompt: str) -> str:
+    """
+    Call the Deepseek API with the given prompt
+    
+    Args:
+        prompt: The prompt to send to the API
+    
+    Returns:
+        The API response text
+    
+    Raises:
+        LLMRequestError: If there is an error in the API request
+    """
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {DEEPSEEK_API_KEY}"
+    }
+    
+    data = {
+        "model": "deepseek-chat",  # Update with the specific model you're using
+        "messages": [
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ],
+        "temperature": 0.2,  # Lower temperature for more consistent responses
+        "max_tokens": 2000
+    }
+    
+    try:
+        print("JSN")
+        response = requests.post(
+            DEEPSEEK_API_URL,
+            headers=headers,
+            json=data,
+            timeout=30  # 30 second timeout
+        )
+
+        if response.status_code != 200:
+            raise LLMRequestError(f"API request failed with status code {response.status_code}: {response.text}")
+        
+        response_data = response.json()
+        
+        # Extract the response content based on Deepseek API structure
+        # Update this according to the actual Deepseek API response format
+        try:
+            logging.info(f"DEEPSEEK RESPONSE: {response_data["choices"]} ")
+            return response_data["choices"][0]["message"]["content"]
+        except (KeyError, IndexError) as e:
+            raise LLMRequestError(f"Failed to extract content from API response: {str(e)}")
+            
+    except requests.RequestException as e:
+        raise LLMRequestError(f"API request failed: {str(e)}")
+
+def parse_llm_response(response_text: str) -> Dict[str, Any]:
+    """
+    Parse the LLM response to extract the JSON analysis
+    
+    Args:
+        response_text: The raw text response from the LLM
+    
+    Returns:
+        Dict containing the parsed analysis
+    
+    Raises:
+        json.JSONDecodeError: If the response cannot be parsed as JSON
+    """
+    # Extract JSON from the response (it might be wrapped in markdown code blocks)
+    logging.info(f"parse_llm_response {response_text=}")
+    json_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', response_text)
+    
+    if json_match:
+        json_str = json_match.group(1)
+    else:
+        # If no code blocks found, try to use the whole response
+        json_str = response_text
+    
+    try:
+        return json.loads(json_str)
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse JSON response: {response_text}")
+        raise
+
+def validate_slots(analysis: Dict[str, Any]) -> None:
+    """
+    Validate that all required slots are filled in the analysis
+    
+    Args:
+        analysis: The parsed analysis dict
+    
+    Raises:
+        SlotFillingError: If any required slots are missing
+    """
+    required_fields = [
+        "function_name",
+        "short_description",
+        "input_output_description",
+        "long_description",
+        "components"
+    ]
+    
+    missing_fields = [field for field in required_fields if field not in analysis or not analysis[field]]
+    
+    if missing_fields:
+        raise SlotFillingError(f"Missing required fields in analysis: {', '.join(missing_fields)}")
+    
+    # Also validate each component
+    if not isinstance(analysis["components"], list):
+        raise SlotFillingError("'components' field must be a list")
+    
+    for i, component in enumerate(analysis["components"]):
+        component_required_fields = [
+            "start_line",
+            "end_line", 
+            "short_description", 
+            "long_description"
+        ]
+        
+        missing_component_fields = [
+            field for field in component_required_fields 
+            if field not in component or component[field] == ""
+        ]
+        
+        if missing_component_fields:
+            raise SlotFillingError(
+                f"Missing required fields in component {i}: {', '.join(missing_component_fields)}"
+            )
+        
+        # Validate line numbers
+        if not isinstance(component["start_line"], int) or not isinstance(component["end_line"], int):
+            raise SlotFillingError(f"Line numbers must be integers in component {i}")
+        
+        if component["start_line"] > component["end_line"]:
+            raise SlotFillingError(
+                f"Start line ({component['start_line']}) is greater than " 
+                f"end line ({component['end_line']}) in component {i}"
+            )
+
+# Example usage for testing
+# if __name__ == "__main__":
+#     import sys
+#     import argparse
+    
+#     parser = argparse.ArgumentParser(description="Analyze a Python function using Deepseek API")
+#     parser.add_argument("--file", required=True, help="Path to the Python file")
+#     parser.add_argument("--function", required=True, help="Name of the function to analyze")
+#     parser.add_argument("--api-key", help="Deepseek API key (or set DEEPSEEK_API_KEY env var)")
+    
+#     args = parser.parse_args()
+    
+#     # Get API key
+#     api_key = args.api_key or os.environ.get("DEEPSEEK_API_KEY")
+#     if not api_key:
+#         parser.error("API key must be provided via --api-key or DEEPSEEK_API_KEY env var")
+    
+#     set_api_key(api_key)
+    
+#     # Read the file
+#     with open(args.file, "r") as f:
+#         file_content = f.read()
+    
+#     # Find the function (very simple approach)
+#     pattern = re.compile(rf"def\s+{args.function}\s*\(.*?\).*?:", re.DOTALL)
+#     match = pattern.search(file_content)
+    
+#     if not match:
+#         print(f"Function '{args.function}' not found in {args.file}")
+#         sys.exit(1)
+    
+#     # Very simple function extraction - for a real implementation, use AST
+#     func_start = match.start()
+#     lines = file_content[func_start:].split("\n")
+    
+#     indent = re.match(r"(\s*)", lines[1]).group(1) if len(lines) > 1 else ""
+#     func_content = lines[0] + "\n"
+    
+#     for line in lines[1:]:
+#         if line.strip() and not line.startswith(indent):
+#             break
+#         func_content += line + "\n"
+    
+#     try:
+#         analysis = analyze_function(func_content, args.function, args.file)
+#         print(json.dumps(analysis, indent=2))
+#     except Exception as e:
+#         print(f"Error analyzing function: {str(e)}")
+#         sys.exit(1)

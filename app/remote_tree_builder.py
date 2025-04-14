@@ -10,20 +10,31 @@ from sqlalchemy.orm import sessionmaker
 from dulwich.repo import Repo
 import tempfile
 import shutil
+import logging
 from sqlalchemy.ext.declarative import declarative_base
+from dotenv import load_dotenv
+load_dotenv()
+
 Base = declarative_base()
+Base.metadata.reflect = True
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(filename)s:%(lineno)d - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 # Import custom modules for database models and AST parsing
 try:
-    from app.models import Repository, Function, Segment, FunctionCall
+    # Try to import from app module first (for installed usage)
+    from app.models import Repository, Function, Segment, FunctionCall, FuncComponent
+    from app.utils.llm_function_analyzer import set_api_key, analyze_function
 except ImportError:
     # For standalone script, define models here
-    
     from sqlalchemy import Column, String, Integer, Boolean, Text, ForeignKey, DateTime
     from sqlalchemy.dialects.postgresql import JSON
     from sqlalchemy.orm import relationship
-    
-    
     
     class Repository(Base):
         __tablename__ = 'repositories'
@@ -44,6 +55,20 @@ except ImportError:
         is_entry = Column(Boolean, default=False)
         class_name = Column(String(128), nullable=True)
         module_name = Column(String(256))
+        short_description = Column(String(255), nullable=True)
+        input_output_description = Column(Text, nullable=True)
+        long_description = Column(Text, nullable=True)
+    
+    class FuncComponent(Base):
+        __tablename__ = 'func_components'
+        id = Column(String(256), primary_key=True)
+        function_id = Column(String(128), ForeignKey('functions.id', ondelete='CASCADE'))
+        short_description = Column(String(255))
+        long_description = Column(Text)
+        start_lineno = Column(Integer)
+        end_lineno = Column(Integer)
+        index = Column(Integer)
+        component_data = Column(JSON, nullable=True)
     
     class Segment(Base):
         __tablename__ = 'segments'
@@ -55,20 +80,24 @@ except ImportError:
         end_lineno = Column(Integer, nullable=True)
         index = Column(Integer)
         target_id = Column(String(128), ForeignKey('functions.id', ondelete='SET NULL'), nullable=True)
-        metadata = Column(JSON, nullable=True)
+        func_component_id = Column(String(256), ForeignKey('func_components.id', ondelete='SET NULL'), nullable=True)
+        segment_data = Column(JSON, nullable=True)
     
     class FunctionCall(Base):
         __tablename__ = 'function_calls'
         caller_id = Column(String(128), ForeignKey('functions.id', ondelete='CASCADE'), primary_key=True)
         callee_id = Column(String(128), ForeignKey('functions.id', ondelete='CASCADE'), primary_key=True)
         call_count = Column(Integer, default=1)
-        metadata = Column(JSON, nullable=True)
+        call_data = Column(JSON, nullable=True)
+        
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from app.utils.llm_function_analyzer import set_api_key, analyze_function
 try:
     from app.utils.ast_parser import scan_project, find_entry_points, build_tree_from_function, print_tree, print_function_info
 except ImportError:
     # For standalone running, import from the current directory
-    from utils.ast_parser import scan_project, find_entry_points, build_tree_from_function, print_tree, print_function_info
+    from app.utils.ast_parser import scan_project, find_entry_points, build_tree_from_function, print_tree, print_function_info
 
 def store_registry_in_database(registry, repo_url, repo_hash, entry_points, session):
     """
@@ -150,6 +179,39 @@ def store_registry_in_database(registry, repo_url, repo_hash, entry_points, sess
     # Commit all functions
     session.commit()
     
+    # Store function components
+    component_count = 0
+    for func_id, func_info in registry.functions.items():
+        db_func_id = f"{repo_hash}:{func_id}"
+        
+        # First delete existing components for this function
+        session.query(FuncComponent).filter_by(function_id=db_func_id).delete()
+        
+        # Add components
+        for component in func_info.get('components', []):
+            component_id = f"{db_func_id}:{component['id']}"
+            
+            # Create component record
+            component_record = FuncComponent(
+                id=component_id,
+                function_id=db_func_id,
+                short_description=component['short_description'],
+                long_description=component['long_description'],
+                start_lineno=component['start_lineno'],
+                end_lineno=component['end_lineno'],
+                index=component['index']
+            )
+            session.add(component_record)
+            
+            component_count += 1
+            
+            # Commit every 50 components
+            if component_count % 50 == 0:
+                session.commit()
+    
+    # Commit all components
+    session.commit()
+    
     # Store segments
     segment_count = 0
     for func_id, func_info in registry.functions.items():
@@ -178,10 +240,12 @@ def store_registry_in_database(registry, repo_url, repo_hash, entry_points, sess
                 end_lineno=segment.get('end_lineno'),
                 index=i,
                 target_id=target_id,
-                segment_data=json.dumps({
+                # Add component ID if it exists
+                func_component_id=f"{db_func_id}:{segment.get('component_id')}" if segment.get('component_id') else None,
+                segment_data={
                     'callee_name': segment.get('callee_name'),
                     'is_standalone': segment.get('is_standalone', True)
-                }) if segment_type in ['call', 'comment'] else None
+                } if segment_type in ['call', 'comment'] else None
             )
             session.add(segment_record)
             
@@ -213,8 +277,10 @@ def store_registry_in_database(registry, repo_url, repo_hash, entry_points, sess
             )
             session.add(call_record)
     
-    # Final commit for all call relationships
+    # commit for all call relationships
     session.commit()
+    
+    
     
     return repo_record
 

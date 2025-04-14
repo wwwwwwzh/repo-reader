@@ -1,11 +1,12 @@
 import ast as std_ast
-import json
+import json, traceback
 import os
 from pathlib import Path
 from collections import defaultdict
 import tokenize
 import re
 import logging
+from app.utils.llm_function_analyzer import set_api_key, analyze_function
 
 logging.basicConfig(
     level=logging.INFO,
@@ -330,8 +331,28 @@ class CallAnalyzer(std_ast.NodeVisitor):
         
         return None, None
 
-import tokenize
 
+
+
+def extract_function_content(file_path, start_line, end_line):
+    """
+    Extract function content from a file based on line numbers
+    
+    Args:
+        file_path: Path to the source file
+        start_line: Starting line number (absolute, 1-based)
+        end_line: Ending line number (absolute, 1-based)
+    
+    Returns:
+        String containing the function content
+    """
+    with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+        # Read all lines and extract the relevant ones
+        # Note: line numbers are 1-based but array indices are 0-based
+        lines = f.readlines()
+        # Subtract 1 from line numbers to convert to 0-based indices
+        return ''.join(lines[start_line-1:end_line])
+    
 def extract_segments(file_path, function_info, call_segments):
     """
     Extract all segments from a function in three types:
@@ -460,7 +481,31 @@ def extract_segments(file_path, function_info, call_segments):
     
     # Ensure the segments are sorted by starting line number.
     segments.sort(key=lambda seg: seg['lineno'])
-    # print(segments)
+    
+    # After all segments are created, associate them with components
+    for segment in segments:
+        # Find the component this segment belongs to
+        # Note: segment line numbers are relative to function start
+        # while component line numbers are absolute
+        segment_abs_start = function_info['lineno'] + segment['lineno'] - 1
+        
+        matching_component = None
+        for component in function_info.get('components', []):
+            # Check if segment falls within this component's line range
+            if (component['start_lineno'] <= segment_abs_start and 
+                (segment['end_lineno'] is None or 
+                 function_info['lineno'] + segment['end_lineno'] - 1 <= component['end_lineno'])):
+                matching_component = component
+                break
+        
+        # If no matching component found, use the first one (should cover the whole function)
+        if not matching_component and function_info.get('components'):
+            matching_component = function_info['components'][0]
+        
+        # Associate segment with component
+        if matching_component:
+            segment['component_id'] = matching_component['id']
+    
     return segments
 
 
@@ -506,8 +551,59 @@ def scan_project(project_root):
     
     logging.info(f"Found {registry.functions} functions")
     
-    # Second pass: Analyze function calls and build segments
-    logging.info("Second pass: Analyzing function calls and building segments...")
+    # Second pass: Use LLM to analyze functions and extract components
+
+    print("Second pass: Analyzing functions with LLM...")
+    
+    set_api_key(os.environ.get("DEEPSEEK_API_KEY"))
+    
+    for func_id, func_info in registry.functions.items():
+        # Get function source code
+        file_path = func_info['file_path']
+        # Extract function content from the file based on line numbers
+        # Note: lineno and end_lineno are absolute (file-based) line numbers
+        logging.info(f"{func_id}, {func_info}")
+        func_content = extract_function_content(file_path, func_info['lineno'], func_info['end_lineno'])
+        
+        
+        
+        try:
+            # Call LLM to analyze the function
+            analysis = analyze_function(func_content, func_info['full_name'])
+            logging.info(f"{analysis=}")
+            # Store LLM-generated metadata in function info
+            func_info['short_description'] = analysis['short_description']
+            func_info['input_output_description'] = analysis['input_output_description']
+            func_info['long_description'] = analysis['long_description']
+            
+            # Process components
+            components = []
+            for i, comp in enumerate(analysis['components']):
+                logging.info(f"{comp=}")
+                # Note: LLM returns relative line numbers (1 = first line of function)
+                # Convert to absolute line numbers for storage
+                abs_start_line = func_info['lineno'] + comp['start_line'] - 1
+                abs_end_line = func_info['lineno'] + comp['end_line'] - 1
+                
+                component = {
+                    'id': f"{func_id}_component_{i}",
+                    'short_description': comp['short_description'],
+                    'long_description': comp['long_description'],
+                    'start_lineno': abs_start_line,
+                    'end_lineno': abs_end_line,
+                    'index': i
+                }
+                components.append(component)
+            
+            # Store components in function info
+            func_info['components'] = components
+            
+        except Exception as e:
+            print(f"Error analyzing function {func_info['full_name']} with LLM: {e}")
+            traceback.print_exc()
+
+    # Third pass: Analyze function calls and build segments
+    logging.info("Third pass: Analyzing function calls and building segments...")
     for func_id, func_info in registry.functions.items():
         file_path = func_info['file_path']
         module_name = func_info['module']
@@ -539,7 +635,7 @@ def scan_project(project_root):
             # Process segments
             call_segments = analyzer.segments
             if func_info['name'] == 'main': 
-                logging.info(f"{func_info}\n{analyzer.calls}\n{analyzer.segments}")
+                logging.info(f"{func_info=}\n{analyzer.calls=}\n{analyzer.segments=}")
                 logging.info(f"Seg: {call_segments}")
             all_segments = extract_segments(file_path, func_info, call_segments)
             

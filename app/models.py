@@ -29,12 +29,16 @@ class Function(db.Model):
     class_name = db.Column(db.String(128), nullable=True)  # Class name if method
     module_name = db.Column(db.String(256))  # Module name
     
+    # LLM-generated fields
+    short_description = db.Column(db.String(255), nullable=True)  # 10 words max
+    input_output_description = db.Column(db.Text, nullable=True)  # 50 words max
+    long_description = db.Column(db.Text, nullable=True)  # 50 words max
+    
     # Relationships
-    segments = db.relationship('Segment', 
-                          foreign_keys='Segment.function_id',  # Specify which foreign key to use
-                          backref=db.backref('function', lazy=True),
-                          lazy='dynamic',
-                          cascade='all, delete-orphan')
+    components = db.relationship('FuncComponent', 
+                             backref=db.backref('function', lazy=True),
+                             lazy='dynamic',
+                             cascade='all, delete-orphan')
     callers = db.relationship('FunctionCall', 
                              foreign_keys='FunctionCall.callee_id',
                              backref=db.backref('callee', lazy=True),
@@ -46,6 +50,26 @@ class Function(db.Model):
                              lazy='dynamic',
                              cascade='all, delete-orphan')
 
+# New FuncComponent model
+class FuncComponent(db.Model):
+    """Component model for storing LLM-generated function components"""
+    __tablename__ = 'func_components'
+    
+    id = db.Column(db.String(256), primary_key=True)  # Composite ID: function_id:component_index
+    function_id = db.Column(db.String(128), db.ForeignKey('functions.id', ondelete='CASCADE'))
+    name = db.Column(db.String(128))  # Component name
+    short_description = db.Column(db.String(255))  # Short description (10 words max)
+    long_description = db.Column(db.Text)  # Long description (50 words max)
+    start_lineno = db.Column(db.Integer)  # Start line number
+    end_lineno = db.Column(db.Integer)  # End line number
+    index = db.Column(db.Integer)  # Index in the function for ordering
+    
+    # Relationship to segments
+    segments = db.relationship('Segment', 
+                             backref=db.backref('func_component', lazy=True),
+                             lazy='dynamic',
+                             cascade='all, delete-orphan')
+    
 class Segment(db.Model):
     """Segment model for storing function segments (code, comments, calls)"""
     __tablename__ = 'segments'
@@ -67,9 +91,14 @@ class Segment(db.Model):
                         foreign_keys='Segment.target_id',  # Specify which foreign key to use
                         backref=db.backref('incoming_calls', lazy='dynamic'))
     
+    # New relationship to components
+    func_component_id = db.Column(db.String(256), db.ForeignKey('func_components.id', ondelete='SET NULL'), 
+                               nullable=True)
+    
     # Additional metadata
     segment_data = db.Column(JSON, nullable=True)  # Additional information about the segment
-
+    
+    
 class FunctionCall(db.Model):
     """Junction table for many-to-many relationship between caller and callee functions"""
     __tablename__ = 'function_calls'

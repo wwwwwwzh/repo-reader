@@ -2,7 +2,8 @@
 # Helper script to demonstrate how to use the code analysis tools
 
 # Set your repository hash here
-REPO_HASH="d305e0f2b00a5b3370c3bd8b6fa0d985afbf2ec9"  # Replace with your actual repo hash
+# REPO_HASH="d305e0f2b00a5b3370c3bd8b6fa0d985afbf2ec9"  # old demo repo
+REPO_HASH="df41207f7ff0563e67030b4254bfed8650202acf"  # mini demo repo
 DB_URI="postgresql://codeuser:<code_password>@localhost:5432/code"
 
 echo "Code Analysis Helper"

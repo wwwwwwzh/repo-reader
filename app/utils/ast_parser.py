@@ -351,7 +351,13 @@ def extract_function_content(file_path, start_line, end_line):
         # Note: line numbers are 1-based but array indices are 0-based
         lines = f.readlines()
         # Subtract 1 from line numbers to convert to 0-based indices
-        return ''.join(lines[start_line-1:end_line])
+        content = ''.join(lines[start_line-1:end_line])
+        # logging.warning(start_line)
+        # logging.warning(end_line)
+        # logging.warning(content)
+        if content.endswith('\n'): # remove trailing new line for easier analysis later on. See build_analysis_prompt()
+            content = content[:-1]
+        return content
     
 def extract_segments(file_path, function_info, call_segments):
     """
@@ -363,6 +369,9 @@ def extract_segments(file_path, function_info, call_segments):
     Consecutive standalone comments will be concatenated, and each segment is annotated
     with its starting (and ending) line number.
 
+    If a segment spans across multiple components, it will be split into multiple segments
+    to ensure each segment belongs to exactly one component.
+
     Args:
         file_path (str): Path to the source file.
         function_info (dict): Dictionary with function details, including 'lineno' and 'end_lineno'.
@@ -371,7 +380,7 @@ def extract_segments(file_path, function_info, call_segments):
 
     Returns:
         List[dict]: List of segments. Each segment is a dict with at least the following keys:
-            - type: one of "call", "ccomment", or "code"
+            - type: one of "call", "comment", or "code"
             - content: the text content of the segment
             - lineno: starting line number of the segment
             - end_lineno: ending line number of the segment
@@ -381,14 +390,14 @@ def extract_segments(file_path, function_info, call_segments):
         source_lines = f.readlines()
     
     # Retrieve the function boundaries (absolute line numbers)
-    start_line = function_info['lineno'] # absolute position of def 
+    start_line = function_info['lineno']  # absolute position of def 
     end_line = function_info['end_lineno']
     # logging.warning(f"{start_line=}, {end_line=}")
     
     # Extract the function's own lines (this is used later for tokenizing comments)
-    function_lines = source_lines[start_line-1:end_line] # 0 is def
+    function_lines = source_lines[start_line-1:end_line]  # 0 is def
     # logging.warning(f"{function_lines[-2:]=}")
-    relative_end_line = len(function_lines) # needs +1 when indexing
+    relative_end_line = len(function_lines)  # needs +1 when indexing
     
     # Use tokenize to extract all comments falling inside the function boundary.
     all_comments = []
@@ -425,7 +434,7 @@ def extract_segments(file_path, function_info, call_segments):
     logging.info(f"{call_map=}, {comment_map=}")
     segments = []
 
-    i = 1 # i is relative
+    i = 1  # i is relative
     while i <= relative_end_line:
         # print(i)
         # -- Process a call segment first --
@@ -451,7 +460,7 @@ def extract_segments(file_path, function_info, call_segments):
             comment_block = [comment_map[i]['content']]
             i += 1
             # Continue as long as the next lines are also standalone comments.
-            while i <= end_line and i in comment_map:
+            while i <= relative_end_line and i in comment_map:
                 comment_block.append(comment_map[i]['content'])
                 i += 1
             # Merge the consecutive comments into one segment.
@@ -482,31 +491,146 @@ def extract_segments(file_path, function_info, call_segments):
     # Ensure the segments are sorted by starting line number.
     segments.sort(key=lambda seg: seg['lineno'])
     
-    # After all segments are created, associate them with components
-    for segment in segments:
-        # Find the component this segment belongs to
-        # Note: segment line numbers are relative to function start
-        # while component line numbers are absolute
-        segment_abs_start = function_info['lineno'] + segment['lineno'] - 1
-        
-        matching_component = None
-        for component in function_info.get('components', []):
-            # Check if segment falls within this component's line range
-            if (component['start_lineno'] <= segment_abs_start and 
-                (segment['end_lineno'] is None or 
-                 function_info['lineno'] + segment['end_lineno'] - 1 <= component['end_lineno'])):
-                matching_component = component
-                break
-        
-        # If no matching component found, use the first one (should cover the whole function)
-        if not matching_component and function_info.get('components'):
-            matching_component = function_info['components'][0]
-        
-        # Associate segment with component
-        if matching_component:
-            segment['component_id'] = matching_component['id']
+    # Split segments that cross component boundaries
+    final_segments = []
+    func_components = sorted(function_info.get('components', []), key=lambda c: c['start_lineno'])
     
-    return segments
+    for segment in segments:
+        # Convert segment relative line numbers to absolute for comparison with components
+        segment_abs_start = function_info['lineno'] + segment['lineno'] - 1
+        segment_abs_end = function_info['lineno'] + segment['end_lineno'] - 1
+        
+        # If no components or segment is a call (which we don't want to split), add as is
+        if not func_components or segment['type'] == 'call':
+            # Still try to assign a component ID if possible
+            for component in func_components:
+                if (component['start_lineno'] <= segment_abs_start and 
+                    segment_abs_end <= component['end_lineno']):
+                    logging.info(f"attaching call to component: {segment=}")
+                    segment['component_id'] = component['id']
+                    break
+            final_segments.append(segment)
+            continue
+        
+        # Check if segment spans multiple components
+        segment_processed = False
+        
+        for idx, component in enumerate(func_components):
+            component_start = component['start_lineno']
+            component_end = component['end_lineno']
+            
+            # Skip components that end before the segment starts
+            if component_end < segment_abs_start:
+                continue
+                
+            # Skip components that start after the segment ends
+            if component_start > segment_abs_end:
+                break
+                
+            # Case 1: Segment starts and ends within this component
+            if component_start <= segment_abs_start and segment_abs_end <= component_end:
+                segment['component_id'] = component['id']
+                final_segments.append(segment)
+                segment_processed = True
+                logging.info(f"attaching call to component: {segment=}")
+                break
+                
+            # Case 2: Segment starts in this component but ends later
+            if component_start <= segment_abs_start and segment_abs_end > component_end:
+                # Calculate relative line numbers within the function
+                split_rel_start = segment['lineno']
+                split_rel_end = component_end - function_info['lineno'] + 1
+                
+                # Content for the first part (from segment start to component end)
+                first_part_lines = function_lines[split_rel_start-1:split_rel_end]
+                first_part_content = "".join(first_part_lines).rstrip()
+                
+                if first_part_content:
+                    # Add first part segment
+                    first_part = {
+                        'type': segment['type'],
+                        'content': first_part_content,
+                        'lineno': split_rel_start,
+                        'end_lineno': split_rel_end,
+                        'component_id': component['id']
+                    }
+                    final_segments.append(first_part)
+                
+                # Adjust segment for the remaining part
+                segment['lineno'] = split_rel_end + 1
+                segment_abs_start = function_info['lineno'] + segment['lineno'] - 1
+                
+                # Recalculate content for the remaining part
+                remaining_lines = function_lines[split_rel_end:segment['end_lineno']]
+                remaining_content = "".join(remaining_lines).rstrip()
+                
+                if not remaining_content:
+                    segment_processed = True
+                    break
+                    
+                segment['content'] = remaining_content
+                logging.warning(f"spliting segment across component: {segment=}")
+                # Continue to next component to process the remaining part
+                
+            # Case 3: Segment starts before this component but ends within it
+            elif component_start > segment_abs_start and segment_abs_end <= component_end:
+                # Calculate relative line numbers within the function
+                split_rel_end = segment['end_lineno']
+                split_rel_start = component_start - function_info['lineno'] + 1
+                
+                # Content for the last part (from component start to segment end)
+                last_part_lines = function_lines[split_rel_start-1:split_rel_end]
+                last_part_content = "".join(last_part_lines).rstrip()
+                
+                if last_part_content:
+                    # Add last part segment
+                    last_part = {
+                        'type': segment['type'],
+                        'content': last_part_content,
+                        'lineno': split_rel_start,
+                        'end_lineno': split_rel_end,
+                        'component_id': component['id']
+                    }
+                    final_segments.append(last_part)
+                
+                # Adjust segment for the first part
+                segment['end_lineno'] = split_rel_start - 1
+                
+                # Recalculate content for the first part
+                first_lines = function_lines[segment['lineno']-1:segment['end_lineno']]
+                first_content = "".join(first_lines).rstrip()
+                
+                if first_content:
+                    segment['content'] = first_content
+                    # Try to find a component for the first part
+                    for prev_comp in func_components:
+                        prev_comp_start = prev_comp['start_lineno']
+                        prev_comp_end = prev_comp['end_lineno']
+                        segment_abs_start = function_info['lineno'] + segment['lineno'] - 1
+                        segment_abs_end = function_info['lineno'] + segment['end_lineno'] - 1
+                        
+                        if (prev_comp_start <= segment_abs_start and 
+                            segment_abs_end <= prev_comp_end):
+                            segment['component_id'] = prev_comp['id']
+                            break
+                            
+                    final_segments.append(segment)
+                
+                segment_processed = True
+                break
+                
+        # If segment wasn't processed (no matching component found), add it without a component ID
+        if not segment_processed:
+            logging.warning(f"SEGMENT NOT ATTACHED: {segment=}")
+            # segment.pop('component_id', None)  # Remove any existing component_id
+            segment['component_id'] = func_components[0]['id']
+            final_segments.append(segment)
+    
+    # Ensure segments are sorted by starting line number
+    final_segments.sort(key=lambda seg: seg['lineno'])
+    
+    return final_segments
+
 
 
 def scan_project(project_root):
@@ -555,7 +679,8 @@ def scan_project(project_root):
 
     print("Second pass: Analyzing functions with LLM...")
     
-    set_api_key(os.environ.get("DEEPSEEK_API_KEY"))
+    set_api_key(os.environ.get("DEEPSEEK_API_KEY"), provider="deepseek")
+    set_api_key(os.environ.get("GROQ_API_KEY"), provider="groq")
     
     for func_id, func_info in registry.functions.items():
         # Get function source code
@@ -569,7 +694,7 @@ def scan_project(project_root):
         
         try:
             # Call LLM to analyze the function
-            analysis = analyze_function(func_content, func_info['full_name'])
+            analysis = analyze_function(func_content, func_info['full_name'], provider="groq")
             logging.info(f"{analysis=}")
             # Store LLM-generated metadata in function info
             func_info['short_description'] = analysis['short_description']

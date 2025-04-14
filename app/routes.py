@@ -1,5 +1,5 @@
-from flask import Blueprint, render_template, request, jsonify, current_app, redirect, url_for,send_from_directory
-from .models import Repository, Function, Segment, FunctionCall
+from flask import Blueprint, render_template, request, jsonify, current_app, redirect, url_for, send_from_directory
+from .models import Repository, Function, Segment, FunctionCall, FuncComponent
 from sqlalchemy import func, desc
 from . import db
 import os
@@ -120,7 +120,8 @@ def get_function_details(repo_hash, function_id):
             'content': segment.content,
             'lineno': segment.lineno,
             'end_lineno': segment.end_lineno,
-            'index': segment.index
+            'index': segment.index,
+            'func_component_id': segment.func_component_id
         }
         
         # Add target function info for call segments
@@ -151,10 +152,45 @@ def get_function_details(repo_hash, function_id):
         'is_entry': function.is_entry,
         'class_name': function.class_name,
         'module_name': function.module_name,
+        'short_description': function.short_description,
+        'input_output_description': function.input_output_description,
+        'long_description': function.long_description,
         'segments': segments_data
     }
     
     return jsonify(function_data)
+
+@bp.route('/api/functions/<repo_hash>/<function_id>/components')
+def get_function_components(repo_hash, function_id):
+    """Get all components for a function"""
+    # Handle case when function_id doesn't have repo_hash prefix
+    if ":" not in function_id:
+        full_function_id = f"{repo_hash}:{function_id}"
+    else:
+        full_function_id = function_id
+    
+    # Get function
+    function = Function.query.get_or_404(full_function_id)
+    
+    # Get all components for this function
+    components = FuncComponent.query.filter_by(function_id=full_function_id).order_by(FuncComponent.index).all()
+    
+    # Prepare components data
+    components_data = []
+    for component in components:
+        component_data = {
+            'id': component.id,
+            'name': component.name,
+            'short_description': component.short_description,
+            'long_description': component.long_description,
+            'start_lineno': component.start_lineno,
+            'end_lineno': component.end_lineno,
+            'index': component.index
+        }
+        
+        components_data.append(component_data)
+    
+    return jsonify(components_data)
 
 @bp.route('/api/functions/<repo_hash>/<function_id>/callees')
 def get_function_callees(repo_hash, function_id):

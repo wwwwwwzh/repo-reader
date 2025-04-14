@@ -16,10 +16,11 @@ show_menu() {
     echo "1. List all functions in the repository"
     echo "2. List only entry point functions"
     echo "3. View segments of a specific function"
-    echo "4. Generate function call graph"
-    echo "5. Exit"
+    echo "4. View components of a specific function"
+    echo "5. Generate function call graph"
+    echo "6. Exit"
     echo
-    echo -n "Enter your choice (1-5): "
+    echo -n "Enter your choice (1-6): "
 }
 
 # Main menu loop
@@ -65,15 +66,63 @@ while true; do
             echo -n "Enter full function name or ID to view segments: "
             read func_id
             
+            # Ask if they want to organize by components
+            echo
+            echo -n "Organize segments by components? (y/n): "
+            read by_component
+            
             # View segments
             echo
             echo "Viewing segments..."
             if [[ $func_id == *":"* ]]; then
                 # It's an ID
-                python /home/webadmin/projects/code/app/utils/database_viewer/view_segments.py --repo-hash $REPO_HASH --db-uri $DB_URI --function-id "$func_id" --show-target
+                if [[ "$by_component" == "y" || "$by_component" == "Y" ]]; then
+                    python /home/webadmin/projects/code/app/utils/database_viewer/view_segments.py --repo-hash $REPO_HASH --db-uri $DB_URI --function-id "$func_id" --show-target --by-component
+                else
+                    python /home/webadmin/projects/code/app/utils/database_viewer/view_segments.py --repo-hash $REPO_HASH --db-uri $DB_URI --function-id "$func_id" --show-target
+                fi
             else
                 # It's a name
-                python /home/webadmin/projects/code/app/utils/database_viewer/view_segments.py --repo-hash $REPO_HASH --db-uri $DB_URI --function-name "$func_id" --show-target
+                if [[ "$by_component" == "y" || "$by_component" == "Y" ]]; then
+                    python /home/webadmin/projects/code/app/utils/database_viewer/view_segments.py --repo-hash $REPO_HASH --db-uri $DB_URI --function-name "$func_id" --show-target --by-component
+                else
+                    python /home/webadmin/projects/code/app/utils/database_viewer/view_segments.py --repo-hash $REPO_HASH --db-uri $DB_URI --function-name "$func_id" --show-target
+                fi
+            fi
+            
+            echo
+            echo "Press Enter to continue..."
+            read
+            ;;
+
+        4)
+            echo
+            echo "View components of a function"
+            echo "---------------------------"
+            echo "First, let's find the function..."
+            
+            echo -n "Enter function name (or part of name): "
+            read func_name
+            
+            # First list matching functions
+            echo
+            echo "Functions matching '$func_name':"
+            python /home/webadmin/projects/code/app/utils/database_viewer/list_functions.py --repo-hash $REPO_HASH --db-uri $DB_URI --filter "$func_name"
+            
+            # Ask for specific function ID or name
+            echo
+            echo -n "Enter full function name or ID to view components: "
+            read func_id
+            
+            # View components
+            echo
+            echo "Viewing components..."
+            if [[ $func_id == *":"* ]]; then
+                # It's an ID
+                python /home/webadmin/projects/code/app/utils/database_viewer/view_components.py --repo-hash $REPO_HASH --db-uri $DB_URI --function-id "$func_id"
+            else
+                # It's a name
+                python /home/webadmin/projects/code/app/utils/database_viewer/view_components.py --repo-hash $REPO_HASH --db-uri $DB_URI --function-name "$func_id"
             fi
             
             echo
@@ -81,7 +130,7 @@ while true; do
             read
             ;;
             
-        4)
+        5)
             echo
             echo "Generate Function Call Graph"
             echo "--------------------------"
@@ -129,7 +178,7 @@ while true; do
             read
             ;;
             
-        5)
+        6)
             echo
             echo "Goodbye!"
             exit 0

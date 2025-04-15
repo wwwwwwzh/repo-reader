@@ -12,10 +12,11 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Initialize the page
     setupPanelToggling();
+    loadFileStructure(repoHash);
     loadEntryFunctions(repoHash);
 });
 
-// Set up panel toggling functionality
+// Set up upper right panel toggling functionality
 function setupPanelToggling() {
     const panelHeader = document.getElementById('panel-header');
     const panelToggle = document.getElementById('panel-toggle');
@@ -31,6 +32,184 @@ function setupPanelToggling() {
     });
 }
 
+// MARK: File System
+// Load repository file structure
+async function loadFileStructure(repoHash) {
+    try {
+        // Show loading indicator
+        const fileTreeElement = document.getElementById('file-tree');
+        fileTreeElement.innerHTML = '<h3>File Structure</h3><div id="loading-file-tree" class="loading"></div>';
+        
+        // Fetch file structure from an API endpoint
+        const response = await fetch(`/code/api/files/${repoHash}`);
+        const files = await response.json();
+        
+        // Remove loading indicator
+        document.getElementById('loading-file-tree').remove();
+        
+        // Build file tree
+        const rootElement = document.createElement('div');
+        rootElement.className = 'node-root';
+        fileTreeElement.appendChild(rootElement);
+        
+        // Build file structure tree
+        buildFileTree(files, rootElement);
+    } catch (error) {
+        console.error('Error loading file structure:', error);
+        document.getElementById('file-tree').innerHTML = 
+            '<h3>File Structure</h3><p>Error loading file structure. Please try again later.</p>';
+    }
+}
+
+function buildFileTree(files, parentElement) {
+    console.warn(files)
+    // Group files by directory
+    const fileGroups = {};
+    
+    files.forEach(file => {
+        const path = file.path.split('/');
+        const fileName = path.pop();
+        const dirPath = path.join('/');
+        
+        if (!fileGroups[dirPath]) {
+            fileGroups[dirPath] = [];
+        }
+        
+        fileGroups[dirPath].push({
+            name: fileName,
+            path: file.path,
+            is_dir: file.is_dir
+        });
+    });
+    
+    // Create directory nodes recursively
+    buildDirectoryNode('', fileGroups, parentElement);
+}
+
+function buildDirectoryNode(dirPath, fileGroups, parentElement) {
+    const dirFiles = fileGroups[dirPath] || [];
+    console.log(dirFiles)
+    
+    // Sort directories first, then files
+    dirFiles.sort((a, b) => {
+        if (a.is_dir && !b.is_dir) return -1;
+        if (!a.is_dir && b.is_dir) return 1;
+        return a.name.localeCompare(b.name);
+    });
+    
+    dirFiles.forEach(file => {
+        const fileNode = document.createElement('div');
+        fileNode.className = 'node';
+        
+        const nameElement = document.createElement('span');
+        nameElement.textContent = file.name;
+        
+        if (file.is_dir) {
+            nameElement.className = 'caret';
+            
+            const childrenElement = document.createElement('div');
+            childrenElement.className = 'nested';
+            
+            nameElement.onclick = function() {
+                toggleNode(this);
+                
+                // If expanding and there are no children, load the subdirectory
+                const nested = this.parentElement.querySelector('.nested');
+                if (nested && nested.classList.contains('active') && nested.children.length === 0) {
+                    const subDirPath = dirPath ? `${dirPath}/${file.name}` : file.name;
+                    buildDirectoryNode(subDirPath, fileGroups, nested);
+                }
+            };
+            
+            fileNode.appendChild(nameElement);
+            fileNode.appendChild(childrenElement);
+        } else {
+            // It's a file
+            nameElement.className = 'file-node';
+            nameElement.onclick = function() {
+                loadFileContent(file.path);
+            };
+            
+            fileNode.appendChild(nameElement);
+        }
+        
+        parentElement.appendChild(fileNode);
+    });
+}
+
+async function loadFileContent(filePath) {
+    try {
+        // Show loading indicators
+        const upperPanel = document.querySelector('.upper-panel');
+        const lowerPanel = document.getElementById('lower-panel');
+        const panelContent = upperPanel.querySelector('.panel-content');
+        const panelTitle = upperPanel.querySelector('.panel-title');
+        
+        panelContent.innerHTML = '<div class="loading"></div>';
+        lowerPanel.innerHTML = '<div class="loading"></div>';
+        panelTitle.textContent = 'Loading File...';
+        
+        // Ensure panel is expanded
+        upperPanel.classList.remove('collapsed');
+        lowerPanel.classList.remove('expanded');
+        upperPanel.querySelector('.panel-toggle').textContent = '▲';
+        
+        // Get repository hash
+        const repoHash = document.querySelector('.repo-info').dataset.repoHash;
+        
+        // Construct complete file path for the repository
+        const repos_dir = '/home/webadmin/projects/code/repos';
+        const completeFilePath = `${repos_dir}/${repoHash}/${filePath}`;
+        
+        // Fetch file content using the complete path
+        const response = await fetch(`/code/api/file?path=${encodeURIComponent(completeFilePath)}&repo_hash=${repoHash}`);
+        
+        if (!response.ok) {
+            throw new Error(`Failed to load file: ${response.statusText}`);
+        }
+        
+        const fileContent = await response.text();
+        
+        // Update panel title
+        panelTitle.textContent = `File: ${filePath.split('/').pop()}`;
+        
+        // Update upper panel with file info
+        panelContent.innerHTML = `
+            <div class="function-details">
+                <div class="file-path">${filePath}</div>
+            </div>
+        `;
+        
+        // Update lower panel with file content
+        const fileLines = fileContent.split('\n');
+        let codeHTML = '<div class="code-container">';
+        
+        fileLines.forEach((line, index) => {
+            codeHTML += `
+                <div class="code-line">
+                    <span class="line-number">${index + 1}</span>
+                    <span class="line-content">${escapeHTML(line)}</span>
+                </div>
+            `;
+        });
+        
+        codeHTML += '</div>';
+        
+        lowerPanel.innerHTML = `
+            <h3>File Content</h3>
+            ${codeHTML}
+        `;
+        
+        // Reset current function ID since we're viewing a full file
+        currentFunctionId = null;
+    } catch (error) {
+        console.error('Error loading file content:', error);
+        document.getElementById('lower-panel').innerHTML = `<p>Error loading file content: ${error.message}</p>`;
+    }
+}
+
+
+// MARK: Workflow System
 // Load entry point functions for the repository
 async function loadEntryFunctions(repoHash) {
     try {
@@ -724,59 +903,30 @@ async function buildFullFunctionCodeView(functionData, highlightComponent = null
     }
     
     try {
-        // Use the file_path and line numbers to get the complete function code
+        // Use the file_path to get the complete file content
         const filePath = functionData.file_path;
-        const startLine = functionData.lineno;
-        const endLine = functionData.end_lineno;
+        const functionStart = functionData.lineno;
+        const functionEnd = functionData.end_lineno;
         
         // Fetch the file content using an API endpoint
         let fileLines = [];
-        let useSegmentsFallback = true;
         
-        // Try to get file content from repository if we have required info
-        if (filePath && startLine && endLine) {
-            try {
-                const repoHash = document.querySelector('.repo-info').dataset.repoHash;
-                const response = await fetch(`/code/api/file?path=${encodeURIComponent(filePath)}&repo_hash=${repoHash}&line_start=${startLine}&line_end=${endLine}`);
-                
-                if (response.ok) {
-                    const fileContent = await response.text();
-                    fileLines = fileContent.split('\n');
-                    useSegmentsFallback = false;
-                } else {
-                    console.warn('Error fetching file content, fallback to segments');
-                }
-            } catch (fileError) {
-                console.warn('Error reading file directly, falling back to segments:', fileError);
-                // Continue with segments fallback
-            }
-        }
-        
-        // Fallback: reconstruct from segments
-        if (useSegmentsFallback) {
-            // Sort segments by line number to ensure correct order
-            const sortedSegments = [...functionData.segments].sort((a, b) => a.lineno - b.lineno);
+        try {
+            const repoHash = document.querySelector('.repo-info').dataset.repoHash;
+            const response = await fetch(`/code/api/file?path=${encodeURIComponent(filePath)}&repo_hash=${repoHash}`);
             
-            // Create an array to hold all lines of the function
-            const totalLines = endLine - startLine + 1;
-            fileLines = Array(totalLines).fill('');
-            
-            // Fill in content from segments
-            for (const segment of sortedSegments) {
-                const segmentContent = segment.content.split('\n');
-                const relStartLine = segment.lineno;
-                
-                for (let i = 0; i < segmentContent.length; i++) {
-                    const fileLineIndex = relStartLine - 1 + i;
-                    if (fileLineIndex >= 0 && fileLineIndex < totalLines) {
-                        fileLines[fileLineIndex] = segmentContent[i];
-                    }
-                }
+            if (response.ok) {
+                const fileContent = await response.text();
+                fileLines = fileContent.split('\n');
+            } else {
+                console.warn('Error fetching complete file, falling back to function-only view');
+                // Fall back to function-only view using segments
+                return fallbackToFunctionOnlyView(functionData, highlightComponent, highlightSegment);
             }
+        } catch (fileError) {
+            console.warn('Error reading file directly, falling back to function-only view:', fileError);
+            return fallbackToFunctionOnlyView(functionData, highlightComponent, highlightSegment);
         }
-        
-        // Prepare the code with syntax highlighting for segments
-        let codeLines = [];
         
         // Get components for the function
         let components = [];
@@ -821,6 +971,173 @@ async function buildFullFunctionCodeView(functionData, highlightComponent = null
         
         // Function to determine if a line belongs to a segment
         function lineInSegment(relLine, segment) {
+            const segmentRelLine = segment.lineno;
+            const segmentRelEnd = segment.end_lineno || segment.lineno;
+            return relLine >= segmentRelLine && relLine <= segmentRelEnd;
+        }
+        
+        // Function to get the component index for coloring
+        function getComponentIndex(component, components) {
+            const index = components.findIndex(c => c.id === component.id);
+            return index >= 0 ? index % componentColors.length : -1;
+        }
+        
+        // Build code lines with appropriate highlighting
+        let codeLines = [];
+        
+        for (let i = 0; i < fileLines.length; i++) {
+            const lineNumber = i + 1;  // 1-based line number
+            const lineContent = fileLines[i] || '';
+            
+            // Determine if this line is part of the selected function
+            const isInFunction = lineNumber >= functionStart && lineNumber <= functionEnd;
+            
+            // If we're inside the function, apply specific highlighting
+            let backgroundColor = isInFunction ? 'rgba(187, 222, 251, 0.15)' : 'transparent';
+            let borderLeft = isInFunction ? '1px solid #bbdefb' : '';
+            let strongHighlight = false;
+            
+            if (isInFunction) {
+                const relLine = lineNumber - functionStart + 1;  // Relative line within the function
+                
+                // Find the component that contains this line
+                const containingComponent = components.find(comp => lineInComponent(lineNumber, comp));
+                
+                // Find the segment that contains this line
+                const segment = functionData.segments.find(seg => lineInSegment(relLine, seg));
+                
+                // Base component highlighting (always show component regions with faint colors)
+                if (containingComponent) {
+                    const colorIndex = getComponentIndex(containingComponent, components);
+                    backgroundColor = componentColors[colorIndex >= 0 ? colorIndex : 0];
+                }
+                
+                // Enhanced component highlighting when a specific component is selected
+                if (highlightComponent && containingComponent && highlightComponent.id === containingComponent.id) {
+                    backgroundColor = highlightedComponentColor;
+                    borderLeft = '3px solid #1976d2';
+                    strongHighlight = true;
+                }
+                
+                // Segment highlighting (overrides component highlighting)
+                if (segment) {
+                    // Apply stronger highlight if this segment is specifically selected
+                    if (highlightSegment && segment.id === highlightSegment.id) {
+                        backgroundColor = highlightedSegmentColors[segment.type];
+                        borderLeft = '3px solid #f57c00';
+                        strongHighlight = true;
+                    }
+                    // Otherwise, if we're viewing a call segment and not on a component view,
+                    // just add a light highlight to all segments
+                    else if (!highlightComponent) {
+                        // Mix the segment color with existing background
+                        const segmentColor = segmentColors[segment.type];
+                        if (backgroundColor === 'transparent' || backgroundColor === 'rgba(187, 222, 251, 0.15)') {
+                            backgroundColor = segmentColor;
+                        }
+                        // Otherwise, the component background will remain
+                    }
+                }
+            }
+            
+            // Generate the HTML for this line
+            codeLines.push(`
+                <div class="code-line ${isInFunction ? 'function-highlight' : ''} ${strongHighlight ? 'strong-highlight' : ''}" 
+                     style="background-color: ${backgroundColor}; ${borderLeft ? 'border-left: ' + borderLeft + ';' : ''}">
+                    <span class="line-number">${lineNumber}</span>
+                    <span class="line-content">${escapeHTML(lineContent)}</span>
+                </div>
+            `);
+        }
+        
+        // Add a scroll indicator to jump to the function
+        const scrollToFunction = `
+            <div class="scroll-indicator">
+                <button onclick="document.querySelector('.function-highlight').scrollIntoView({behavior: 'smooth'})">
+                    Scroll to Function (Line ${functionStart})
+                </button>
+            </div>
+        `;
+        
+        // Return the complete code view
+        return `
+            ${scrollToFunction}
+            <div class="function-code-view">
+                <div class="code-container">
+                    ${codeLines.join('')}
+                </div>
+            </div>
+        `;
+    } catch (error) {
+        console.error('Error building function code view:', error);
+        return `<p>Error displaying function code: ${error.message}</p>`;
+    }
+}
+
+// Fallback function for when we can't get the complete file
+function fallbackToFunctionOnlyView(functionData, highlightComponent, highlightSegment) {
+    try {
+        // Sort segments by line number to ensure correct order
+        const sortedSegments = [...functionData.segments].sort((a, b) => a.lineno - b.lineno);
+        
+        // Create an array to hold all lines of the function
+        const totalLines = functionData.end_lineno - functionData.lineno + 1;
+        const fileLines = Array(totalLines).fill('');
+        
+        // Fill in content from segments
+        for (const segment of sortedSegments) {
+            const segmentContent = segment.content.split('\n');
+            const relStartLine = segment.lineno;
+            
+            for (let i = 0; i < segmentContent.length; i++) {
+                const fileLineIndex = relStartLine - 1 + i;
+                if (fileLineIndex >= 0 && fileLineIndex < totalLines) {
+                    fileLines[fileLineIndex] = segmentContent[i];
+                }
+            }
+        }
+        
+        // Get components for the function
+        let components = [];
+        try {
+            const repoHash = document.querySelector('.repo-info').dataset.repoHash;
+            const compResponse = fetch(`/code/api/functions/${repoHash}/${functionData.id}/components`);
+            components = compResponse.json();
+        } catch (error) {
+            console.warn('Error fetching components:', error);
+        }
+        
+        // Sort components by start line
+        components.sort((a, b) => a.start_lineno - b.start_lineno);
+        
+        // Define highlight colors (same as in the main function)
+        const componentColors = [
+            'rgba(187, 222, 251, 0.15)',  // Light blue (very faint)
+            'rgba(200, 230, 201, 0.15)',  // Light green (very faint)
+            'rgba(255, 236, 179, 0.15)'   // Light amber (very faint)
+        ];
+        
+        const segmentColors = {
+            'code': 'rgba(255, 253, 231, 0.2)',    // Light yellow (faint)
+            'call': 'rgba(255, 232, 230, 0.2)',    // Light red (faint)
+            'comment': 'rgba(245, 245, 245, 0.2)'  // Light gray (faint)
+        };
+        
+        const highlightedComponentColor = 'rgba(187, 222, 251, 0.5)';  // Blue (stronger)
+        
+        const highlightedSegmentColors = {
+            'code': 'rgba(255, 253, 231, 0.7)',    // Yellow (stronger)
+            'call': 'rgba(255, 232, 230, 0.7)',    // Red (stronger)
+            'comment': 'rgba(245, 245, 245, 0.7)'  // Gray (stronger)
+        };
+        
+        // Function to determine if a line belongs to a component
+        function lineInComponent(absLine, component) {
+            return absLine >= component.start_lineno && absLine <= component.end_lineno;
+        }
+        
+        // Function to determine if a line belongs to a segment
+        function lineInSegment(relLine, segment) {
             return relLine >= segment.lineno && 
                    (segment.end_lineno ? relLine <= segment.end_lineno : relLine === segment.lineno);
         }
@@ -832,6 +1149,8 @@ async function buildFullFunctionCodeView(functionData, highlightComponent = null
         }
         
         // Build code lines with appropriate highlighting
+        let codeLines = [];
+        
         for (let i = 0; i < fileLines.length; i++) {
             const relLine = i + 1;  // Relative line number (1-based)
             const absLine = functionData.lineno + i;  // Absolute line number
@@ -891,19 +1210,23 @@ async function buildFullFunctionCodeView(functionData, highlightComponent = null
             `);
         }
         
-        // Return the complete code view
+        // Return the function-only code view
         return `
             <div class="function-code-view">
+                <div class="file-view-note">
+                    <p>Note: Showing only the function code. Unable to load the complete file.</p>
+                </div>
                 <div class="code-container">
                     ${codeLines.join('')}
                 </div>
             </div>
         `;
     } catch (error) {
-        console.error('Error building function code view:', error);
+        console.error('Error building fallback function view:', error);
         return `<p>Error displaying function code: ${error.message}</p>`;
     }
 }
+
 
 function escapeHTML(str) {
     if (!str) return '';

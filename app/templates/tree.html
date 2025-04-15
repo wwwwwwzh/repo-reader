@@ -66,6 +66,62 @@
             overflow-y: auto;
             position: relative;
         }
+        .tree-container {
+            display: flex;
+            height: calc(100vh - 120px);
+        }
+        .file-tree-nav {
+            width: 20%;
+            border-right: 1px solid #eee;
+            padding-right: 10px;
+            overflow-y: auto;
+            position: relative;
+        }
+        .file-node {
+            color: #333;
+            cursor: pointer;
+            padding: 3px 0;
+            display: block;
+            font-size: 0.9em;
+        }
+        .file-node:hover {
+            color: #1976d2;
+            text-decoration: underline;
+        }
+        .function-highlight {
+            background-color: rgba(187, 222, 251, 0.3);
+        }
+        .scroll-indicator {
+            position: sticky;
+            top: 0;
+            background-color: white;
+            padding: 5px 0;
+            z-index: 100;
+            border-bottom: 1px solid #ddd;
+            margin-bottom: 10px;
+        }
+        .scroll-indicator button {
+            background-color: #1976d2;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .file-view-note {
+            background-color: #fff3cd;
+            padding: 10px;
+            border-left: 4px solid #ffc107;
+            margin-bottom: 10px;
+        }
+        .tree-nav {
+            width: 20%;
+            border-right: 1px solid #eee;
+            padding-right: 10px;
+            overflow-y: auto;
+            position: relative;
+        }
+
         .function-preview {
             width: 75%;
             padding-left: 10px;
@@ -380,7 +436,12 @@
     </div>
     
     <div class="tree-container">
+        <div class="file-tree-nav" id="file-tree">
+            <h3>File Structure</h3>
+            <div id="loading-file-tree" class="loading"></div>
+        </div>
         <div class="tree-nav" id="tree">
+            <h3>Function Components</h3>
             <div id="loading-tree" class="loading"></div>
         </div>
         <div class="function-preview" id="function-preview">

@@ -65,6 +65,39 @@ def show_function_tree(repo_hash):
 def serve_tree_js():
     return send_from_directory(os.path.join(current_app.root_path, 'static/js'), 'tree.js')
 
+@bp.route('/api/files/<repo_hash>')
+def get_file_structure(repo_hash):
+    """API endpoint to get the file structure of a repository"""
+    # Get repository
+    # repo = Repository.query.get_or_404(repo_hash)
+    
+    # Use your repo cache directory to walk the file system
+    repos_dir = current_app.config.get('REPO_CACHE_DIR', '/tmp/repos')
+    # repo_name = repo.url.split("/")[-1].replace(".git", "")
+    repo_path = os.path.join(repos_dir, repo_hash)
+    print(repo_path)
+    # Build file structure
+    file_structure = []
+    for root, dirs, files in os.walk(repo_path):
+        rel_path = os.path.relpath(root, repo_path)
+        if rel_path != '.':
+            file_structure.append({
+                'path': rel_path,
+                'is_dir': True
+            })
+        
+        for file in files:
+            if file.endswith('.py') or file.endswith('.js') or file.endswith('.html') or file.endswith('.css'):
+                file_path = os.path.join(rel_path, file)
+                if file_path.startswith('.'):
+                    file_path = file_path[2:]
+                file_structure.append({
+                    'path': file_path,
+                    'is_dir': False
+                })
+    
+    return jsonify(file_structure)
+
 @bp.route('/api/file', methods=['GET'])
 def get_file_content():
     """

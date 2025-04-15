@@ -2,6 +2,9 @@
 <html>
 <head>
     <title>Function Segment Tree Viewer</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" rel="stylesheet" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -413,6 +416,29 @@
         }
         @keyframes spin {
             to { transform: rotate(360deg); }
+        }
+        /* Override Prism defaults to remove background */
+        code[class*="language-"],
+        pre[class*="language-"] {
+            background: transparent !important;
+            box-shadow: none !important;
+            text-shadow: none !important;
+            white-space: pre !important;
+        }
+
+        /* Ensure code content preserves whitespace */
+        .line-content code {
+            white-space: pre !important;
+            display: block !important;
+        }
+
+        /* Make sure line numbers stay aligned */
+        .line-number {
+            user-select: none;
+            text-align: right;
+            padding-right: 10px;
+            min-width: 40px;
+            color: #999;
         }
     </style>
 </head>

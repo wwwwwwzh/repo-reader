@@ -188,7 +188,7 @@ async function loadFileContent(filePath) {
             codeHTML += `
                 <div class="code-line">
                     <span class="line-number">${index + 1}</span>
-                    <span class="line-content">${escapeHTML(line)}</span>
+                    <span class="line-content"><code class="language-python">${escapeHTML(line)}</code></span>
                 </div>
             `;
         });
@@ -202,6 +202,10 @@ async function loadFileContent(filePath) {
         
         // Reset current function ID since we're viewing a full file
         currentFunctionId = null;
+
+        setTimeout(() => {
+            Prism.highlightAll();
+        }, 100);
     } catch (error) {
         console.error('Error loading file content:', error);
         document.getElementById('lower-panel').innerHTML = `<p>Error loading file content: ${error.message}</p>`;
@@ -1045,9 +1049,10 @@ async function buildFullFunctionCodeView(functionData, highlightComponent = null
                 <div class="code-line ${isInFunction ? 'function-highlight' : ''} ${strongHighlight ? 'strong-highlight' : ''}" 
                      style="background-color: ${backgroundColor}; ${borderLeft ? 'border-left: ' + borderLeft + ';' : ''}">
                     <span class="line-number">${lineNumber}</span>
-                    <span class="line-content">${escapeHTML(lineContent)}</span>
+                    <span class="line-content"><code class="language-python">${escapeHTML(lineContent)}</code></span>
                 </div>
             `);
+            
         }
         
         // Add a scroll indicator to jump to the function
@@ -1058,6 +1063,10 @@ async function buildFullFunctionCodeView(functionData, highlightComponent = null
                 </button>
             </div>
         `;
+
+        setTimeout(() => {
+            Prism.highlightAll();
+        }, 100);
         
         // Return the complete code view
         return `
@@ -1205,7 +1214,7 @@ function fallbackToFunctionOnlyView(functionData, highlightComponent, highlightS
                 <div class="code-line ${strongHighlight ? 'strong-highlight' : ''}" 
                      style="background-color: ${backgroundColor}; ${borderLeft ? 'border-left: ' + borderLeft + ';' : ''}">
                     <span class="line-number">${relLine}</span>
-                    <span class="line-content">${escapeHTML(lineContent)}</span>
+                    span class="line-content"><code class="language-python">${escapeHTML(lineContent)}</code></span>
                 </div>
             `);
         }
@@ -1227,6 +1236,12 @@ function fallbackToFunctionOnlyView(functionData, highlightComponent, highlightS
     }
 }
 
+function applyPrismHighlighting() {
+    // Force Prism to re-highlight all code elements
+    if (typeof Prism !== 'undefined') {
+        Prism.highlightAll();
+    }
+}
 
 function escapeHTML(str) {
     if (!str) return '';

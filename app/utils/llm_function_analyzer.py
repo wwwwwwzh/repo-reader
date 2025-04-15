@@ -143,13 +143,13 @@ def build_analysis_prompt(function_content: str, function_name_full: str) -> str
     # logging.info(numbered_content)
     
     prompt = """
-Analyze the following Python function and provide a structured analysis. Your analysis must include all of the following components:
+Analyze the following Python function and provide a structured analysis. Your analysis MUST include all of the following components:
 
 1. Short Description: Describe the function's purpose in 10 words or fewer
 2. Input/Output Description: Describe the inputs and outputs of the function in 50 words or fewer
 3. Long Description: Provide a more detailed explanation of what the function does in 50 words or fewer
-4. Functional Components: Identify no more than 5 **MUTUALLY EXCLUSIVE and COLLECTIVELY EXHAUSTIVE** segments of the function and for each provide:
-   - Start line number (def line is line 1, last line of function is length of all lines, first component MUST start at line 1)
+4. Components of function: Identify no more than 5 **MUTUALLY EXCLUSIVE and COLLECTIVELY EXHAUSTIVE** components of the function and for each provide:
+   - Start line number (def line is line 1, last line of function is length of all lines, first component MUST start at line 1, the start line number of any other component should be exactly 1 more than previous component's end line)
    - End line number (note that end line number of last component MUST match the end line number of the entire function)
    - Short description (10 words or fewer)
    - Long description (50 words or fewer)
@@ -269,7 +269,7 @@ def call_groq_api(prompt: str) -> str:
     }
     
     try:
-        logging.info("Sending request to Groq API")
+        # logging.info("Sending request to Groq API")
         response = requests.post(
             GROQ_API_URL,
             headers=headers,
@@ -335,7 +335,7 @@ def parse_llm_response(response_text: str) -> Dict[str, Any]:
         json.JSONDecodeError: If the response cannot be parsed as JSON
     """
     # Extract JSON from the response (it might be wrapped in markdown code blocks)
-    logging.info(f"parse_llm_response {response_text=}")
+    # logging.info(f"parse_llm_response {response_text=}")
     json_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', response_text)
     
     if json_match:

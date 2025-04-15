@@ -1,492 +1,509 @@
-<!DOCTYPE html>
-<html>
 <head>
-    <title>Enhanced Function Segment Tree Viewer</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-            line-height: 1.6;
-            background-color: #f5f5f5;
-        }
-        header {
-            background-color: #333;
-            color: white;
-            padding: 10px 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
-            background-color: white;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.12);
-            min-height: calc(100vh - 100px);
-        }
-        .repo-info {
-            margin-bottom: 20px;
-            padding-bottom: 15px;
-            border-bottom: 1px solid #eee;
-        }
-        .repo-title {
-            font-size: 1.5em;
-            font-weight: bold;
-        }
-        .repo-url {
-            color: #666;
-            margin-top: 5px;
-            word-break: break-all;
-        }
-        .tree-container {
-            display: flex;
-        }
-        .tree-nav {
-            width: 25%;
-            border-right: 1px solid #eee;
-            padding-right: 20px;
-            overflow-y: auto;
-            max-height: 800px;
-        }
-        .function-preview {
-            width: 75%;
-            padding-left: 20px;
-            overflow-y: auto;
-            max-height: 800px;
-        }
-        .node {
-            margin-left: 20px;
-            position: relative;
-        }
-        .node-root {
-            margin-left: 0;
-        }
-        .caret {
-            cursor: pointer;
-            user-select: none;
-            position: relative;
-            padding: 5px 0;
-            display: block;
-        }
-        .caret::before {
-            content: "⊞";
-            color: #333;
-            display: inline-block;
-            margin-right: 6px;
-        }
-        .caret-down::before {
-            content: "⊟";
-        }
-        .nested {
-            display: none;
-        }
-        .active {
-            display: block;
-        }
-        pre {
-            background-color: #f9f9f9;
-            padding: 10px;
-            border-radius: 4px;
-            border: 1px solid #ddd;
-            overflow-x: auto;
-            white-space: pre-wrap;
-            word-wrap: break-word;
-            max-height: 500px;
-        }
-        code {
-            font-family: Consolas, Monaco, 'Andale Mono', monospace;
-            font-size: 14px;
-        }
-        .breadcrumb {
-            margin-bottom: 15px;
-            padding-bottom: 10px;
-            border-bottom: 1px solid #eee;
-        }
-        .breadcrumb a {
-            color: #333;
-            text-decoration: none;
-        }
-        .breadcrumb a:hover {
-            text-decoration: underline;
-        }
-        .active-node {
-            background-color: #e0f7fa;
-            border-radius: 3px;
-        }
-        .code-type {
-            color: #666;
-            font-size: 0.8em;
-            margin-bottom: 5px;
-        }
-        .function-name {
-            font-weight: bold;
-        }
-        .file-path {
-            font-size: 0.9em;
-            color: #666;
-            margin-top: 5px;
-        }
-        .loading {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 3px solid rgba(0, 0, 0, 0.1);
-            border-radius: 50%;
-            border-top-color: #09f;
-            animation: spin 1s ease-in-out infinite;
-            margin: 0 auto;
-        }
-        .function-details {
-            margin-bottom: 20px;
-            padding: 15px;
-            border: 1px solid #e0e0e0;
-            border-radius: 4px;
-            background-color: #f8f9fa;
-        }
-        .segment {
-            margin-bottom: 15px;
-            padding: 10px;
-            border-radius: 4px;
-        }
-        .segment-code {
-            background-color: #fffde7;
-            border: 1px solid #fff59d;
-        }
-        .segment-call {
-            background-color: #e8f5e9;
-            border: 1px solid #a5d6a7;
-        }
-        .segment-comment {
-            background-color: #f5f5f5;
-            border: 1px solid #e0e0e0;
-        }
-        .segment-header {
-            font-weight: bold;
-            margin-bottom: 5px;
-        }
-        .segment-body {
-            padding: 5px;
-            background-color: #fff;
-            border-radius: 3px;
-        }
-        .segment-target {
-            margin-top: 10px;
-            padding: 10px;
-            background-color: #f1f8e9;
-            border-radius: 3px;
-            border-left: 4px solid #7cb342;
-        }
-        .component {
-            margin-bottom: 20px;
-            padding: 15px;
-            border: 1px solid #bbdefb;
-            border-radius: 4px;
-            background-color: #e3f2fd;
-        }
-        .component-title {
-            font-weight: bold;
-            font-size: 1.1em;
-            margin-bottom: 5px;
-        }
-        .component-description {
-            margin-bottom: 10px;
-            color: #555;
-        }
-        .component-segments {
-            margin-top: 10px;
-        }
-        /* Node styles for different types */
-        .node-function {
-            color: #0d47a1;
-            font-weight: bold;
-        }
-        .node-component {
-            color: #00695c;
-            font-style: italic;
-        }
-        .node-segment-code {
-            color: #f57f17;
-        }
-        .node-segment-call {
-            color: #d81b60;
-        }
-        .node-segment-comment {
-            color: #6d4c41;
-        }
-        .component-desc {
-            color: #666;
-            font-size: 0.9em;
-            font-style: italic;
-            margin-left: 20px;
-            display: block;
-        }
-        .header-nav a {
-            color: white;
-            text-decoration: none;
-            margin-left: 15px;
-        }
-        .header-nav a:hover {
-            text-decoration: underline;
-        }
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-    </style>
+<title>Enhanced Function Segment Tree Viewer</title>
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 0;
+        line-height: 1.6;
+        background-color: #f5f5f5;
+    }
+    header {
+        background-color: #333;
+        color: white;
+        padding: 10px 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+        background-color: white;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+        min-height: calc(100vh - 100px);
+    }
+    .repo-info {
+        margin-bottom: 20px;
+        padding-bottom: 15px;
+        border-bottom: 1px solid #eee;
+    }
+    .repo-title {
+        font-size: 1.5em;
+        font-weight: bold;
+    }
+    .repo-url {
+        color: #666;
+        margin-top: 5px;
+        word-break: break-all;
+    }
+    .tree-container {
+        display: flex;
+    }
+    .tree-nav {
+        width: 25%;
+        border-right: 1px solid #eee;
+        padding-right: 20px;
+        overflow-y: auto;
+        max-height: 800px;
+    }
+    .function-preview {
+        width: 75%;
+        padding-left: 20px;
+        overflow-y: auto;
+        max-height: 800px;
+    }
+    .node {
+        margin-left: 20px;
+        position: relative;
+    }
+    .node-root {
+        margin-left: 0;
+    }
+    .caret {
+        cursor: pointer;
+        user-select: none;
+        position: relative;
+        padding: 5px 0;
+        display: block;
+    }
+    .caret::before {
+        content: "⊞";
+        color: #333;
+        display: inline-block;
+        margin-right: 6px;
+    }
+    .caret-down::before {
+        content: "⊟";
+    }
+    .nested {
+        display: none;
+    }
+    .active {
+        display: block;
+    }
+    pre {
+        background-color: #f9f9f9;
+        padding: 10px;
+        border-radius: 4px;
+        border: 1px solid #ddd;
+        overflow-x: auto;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        max-height: 500px;
+    }
+    code {
+        font-family: Consolas, Monaco, 'Andale Mono', monospace;
+        font-size: 14px;
+    }
+    .breadcrumb {
+        margin-bottom: 15px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #eee;
+    }
+    .breadcrumb a {
+        color: #333;
+        text-decoration: none;
+    }
+    .breadcrumb a:hover {
+        text-decoration: underline;
+    }
+    .active-node {
+        background-color: #e0f7fa;
+        border-radius: 3px;
+    }
+    .code-type {
+        color: #666;
+        font-size: 0.8em;
+        margin-bottom: 5px;
+    }
+    .function-name {
+        font-weight: bold;
+    }
+    .file-path {
+        font-size: 0.9em;
+        color: #666;
+        margin-top: 5px;
+    }
+    .loading {
+        display: inline-block;
+        width: 20px;
+        height: 20px;
+        border: 3px solid rgba(0, 0, 0, 0.1);
+        border-radius: 50%;
+        border-top-color: #09f;
+        animation: spin 1s ease-in-out infinite;
+        margin: 0 auto;
+    }
+    .function-details {
+        margin-bottom: 20px;
+        padding: 15px;
+        border: 1px solid #e0e0e0;
+        border-radius: 4px;
+        background-color: #f8f9fa;
+    }
+    .segment {
+        margin-bottom: 15px;
+        padding: 10px;
+        border-radius: 4px;
+    }
+    .segment-code {
+        background-color: #fffde7;
+        border: 1px solid #fff59d;
+    }
+    .segment-call {
+        background-color: #ffe8e6;
+        border: 1px solid #ffb3ac;
+    }
+    .segment-comment {
+        background-color: #f5f5f5;
+        border: 1px solid #e0e0e0;
+    }
+    .segment-header {
+        font-weight: bold;
+        margin-bottom: 5px;
+    }
+    .segment-body {
+        padding: 5px;
+        background-color: #fff;
+        border-radius: 3px;
+    }
+    .segment-target {
+        margin-top: 10px;
+        padding: 10px;
+        background-color: #ffe8e6;
+        border-radius: 3px;
+        border-left: 4px solid #ff8a80;
+    }
+    .component {
+        margin-bottom: 20px;
+        padding: 15px;
+        border: 1px solid #bbdefb;
+        border-radius: 4px;
+        background-color: #e3f2fd;
+    }
+    .component-title {
+        font-weight: bold;
+        font-size: 1.1em;
+        margin-bottom: 5px;
+    }
+    .component-description {
+        margin-bottom: 10px;
+        color: #555;
+    }
+    .component-segments {
+        margin-top: 10px;
+    }
+    /* Node styles for different types */
+    .node-function {
+        color: #0d47a1;
+        font-weight: bold;
+    }
+    .node-component {
+        color: #00695c;
+        font-style: italic;
+    }
+    .node-segment-code {
+        color: #f57f17;
+    }
+    .node-segment-call {
+        color: #d32f2f;
+        font-weight: bold;
+    }
+    .node-segment-comment {
+        color: #6d4c41;
+    }
+    .component-desc {
+        color: #666;
+        font-size: 0.9em;
+        font-style: italic;
+        margin-left: 20px;
+        display: block;
+    }
+    .header-nav a {
+        color: white;
+        text-decoration: none;
+        margin-left: 15px;
+    }
+    .header-nav a:hover {
+        text-decoration: underline;
+    }
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+</style>
 </head>
 <body>
-    <header>
-        <h1>Enhanced Function Segment Tree Viewer</h1>
-        <div class="header-nav">
-            <a href="/code/">Home</a>
-            <a href="/code/tree/{{ repo_hash }}">AST Tree</a>
-        </div>
-    </header>
+<header>
+    <h1>Enhanced Function Segment Tree Viewer</h1>
+    <div class="header-nav">
+        <a href="/code/">Home</a>
+        <a href="/code/tree/{{ repo_hash }}">AST Tree</a>
+    </div>
+</header>
+
+<div class="container">
+    <div class="breadcrumb">
+        <a href="/code/">Home</a> &gt; 
+        <a href="/code/tree/{{ repo_hash }}">{{ repo_name }}</a> &gt;
+        <span>Function Tree</span>
+    </div>
     
-    <div class="container">
-        <div class="breadcrumb">
-            <a href="/code/">Home</a> &gt; 
-            <a href="/code/tree/{{ repo_hash }}">{{ repo_name }}</a> &gt;
-            <span>Function Tree</span>
+    <div class="repo-info" data-repo-hash="{{ repo_hash }}">
+        <div class="repo-title">{{ repo_name }}</div>
+        <div class="repo-url">{{ repo_url }}</div>
+    </div>
+    
+    <div class="tree-container">
+        <div class="tree-nav" id="tree">
+            <div id="loading-tree" class="loading"></div>
         </div>
-        
-        <div class="repo-info" data-repo-hash="{{ repo_hash }}">
-            <div class="repo-title">{{ repo_name }}</div>
-            <div class="repo-url">{{ repo_url }}</div>
-        </div>
-        
-        <div class="tree-container">
-            <div class="tree-nav" id="tree">
-                <div id="loading-tree" class="loading"></div>
-            </div>
-            <div class="function-preview" id="function-preview">
-                <div class="function-preview-content">
-                    <p>Select a function from the tree to view its details.</p>
-                    <p>You can explore the function structure by:</p>
-                    <ul>
-                        <li>Clicking on a function to view its details</li>
-                        <li>Expanding a function to see its components</li>
-                        <li>Expanding components to see their segments</li>
-                        <li>Clicking on segments to view their content</li>
-                    </ul>
-                </div>
+        <div class="function-preview" id="function-preview">
+            <div class="function-preview-content">
+                <p>Select a function from the tree to view its details.</p>
+                <p>You can explore the function structure by:</p>
+                <ul>
+                    <li>Clicking on a function to view its details</li>
+                    <li>Expanding a function to see its components</li>
+                    <li>Expanding components to see their segments</li>
+                    <li>Clicking on segments to view their content</li>
+                    <li>Expanding call segments to see the target function's components</li>
+                </ul>
             </div>
         </div>
     </div>
-    
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            const repoHash = document.querySelector('.repo-info').dataset.repoHash;
-            loadEntryFunctions(repoHash);
-        });
+</div>
 
-        async function loadEntryFunctions(repoHash) {
-            try {
-                // Show loading
-                const treeElement = document.getElementById('tree');
-                treeElement.innerHTML = '<div id="loading-tree" class="loading"></div>';
-                
-                // Fetch entry functions
-                const response = await fetch(`/code/api/functions/${repoHash}/entries`);
-                const functions = await response.json();
-                
-                // Remove loading
-                treeElement.innerHTML = '';
-                
-                if (functions.length === 0) {
-                    treeElement.innerHTML = '<p>No entry functions found.</p>';
-                    return;
-                }
-                
-                // Build the tree
-                const rootElement = document.createElement('div');
-                rootElement.className = 'node-root';
-                treeElement.appendChild(rootElement);
-                
-                // Add each entry function
-                functions.forEach(func => {
-                    const funcNode = document.createElement('div');
-                    funcNode.className = 'node';
-                    funcNode.dataset.id = func.id;
-                    funcNode.dataset.type = 'function';
-                    
-                    const nameElement = document.createElement('span');
-                    nameElement.className = 'caret node-function';
-                    nameElement.textContent = func.name;
-                    nameElement.onclick = function() {
-                        toggleNode(this);
-                        loadFunctionDetails(repoHash, func.id);
-                        
-                        // If expanding and there are no children, load components
-                        const nested = this.parentElement.querySelector('.nested');
-                        if (nested && nested.classList.contains('active') && nested.children.length === 0) {
-                            loadFunctionComponents(repoHash, func.id, nested);
-                        }
-                    };
-                    
-                    const childrenElement = document.createElement('div');
-                    childrenElement.className = 'nested';
-                    
-                    funcNode.appendChild(nameElement);
-                    funcNode.appendChild(childrenElement);
-                    rootElement.appendChild(funcNode);
-                });
-            } catch (error) {
-                console.error('Error loading entry functions:', error);
-                document.getElementById('tree').innerHTML = 
-                    '<p>Error loading function tree. Please try again later.</p>';
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const repoHash = document.querySelector('.repo-info').dataset.repoHash;
+        loadEntryFunctions(repoHash);
+    });
+
+    async function loadEntryFunctions(repoHash) {
+        try {
+            // Show loading
+            const treeElement = document.getElementById('tree');
+            treeElement.innerHTML = '<div id="loading-tree" class="loading"></div>';
+            
+            // Fetch entry functions
+            const response = await fetch(`/code/api/functions/${repoHash}/entries`);
+            const functions = await response.json();
+            
+            // Remove loading
+            treeElement.innerHTML = '';
+            
+            if (functions.length === 0) {
+                treeElement.innerHTML = '<p>No entry functions found.</p>';
+                return;
             }
-        }
-
-        function toggleNode(element) {
-            element.classList.toggle('caret-down');
-            const nested = element.parentElement.querySelector('.nested');
-            if (nested) {
-                nested.classList.toggle('active');
-            }
-        }
-
-        async function loadFunctionComponents(repoHash, functionId, parentElement) {
-            try {
-                // Show loading
-                parentElement.innerHTML = '<div class="loading"></div>';
+            
+            // Build the tree
+            const rootElement = document.createElement('div');
+            rootElement.className = 'node-root';
+            treeElement.appendChild(rootElement);
+            
+            // Add each entry function
+            functions.forEach(func => {
+                const funcNode = document.createElement('div');
+                funcNode.className = 'node';
+                funcNode.dataset.id = func.id;
+                funcNode.dataset.type = 'function';
                 
-                // Fetch components
-                const response = await fetch(`/code/api/functions/${repoHash}/${functionId}/components`);
-                const components = await response.json();
-                
-                // Fetch function details to get segments
-                const funcResponse = await fetch(`/code/api/functions/${repoHash}/${functionId}`);
-                const functionData = await funcResponse.json();
-                
-                // Clear loading
-                parentElement.innerHTML = '';
-                
-                if (components.length === 0) {
-                    // If no components found, display segments directly
-                    parentElement.innerHTML = '<div class="node">No components found. Showing segments directly:</div>';
+                const nameElement = document.createElement('span');
+                nameElement.className = 'caret node-function';
+                nameElement.textContent = func.name;
+                nameElement.onclick = function() {
+                    toggleNode(this);
+                    loadFunctionDetails(repoHash, func.id);
                     
-                    // Add segments directly
-                    if (functionData.segments && functionData.segments.length > 0) {
-                        loadSegmentsIntoNode(functionData.segments, parentElement);
-                    } else {
-                        parentElement.innerHTML += '<div class="node">No segments found</div>';
+                    // If expanding and there are no children, load components
+                    const nested = this.parentElement.querySelector('.nested');
+                    if (nested && nested.classList.contains('active') && nested.children.length === 0) {
+                        loadFunctionComponents(repoHash, func.id, nested);
                     }
-                    return;
-                }
+                };
                 
-                // Create a map of component IDs to segments
-                const componentSegments = {};
-                const unassignedSegments = [];
+                const childrenElement = document.createElement('div');
+                childrenElement.className = 'nested';
                 
-                if (functionData.segments) {
-                    functionData.segments.forEach(segment => {
-                        if (segment.func_component_id) {
-                            if (!componentSegments[segment.func_component_id]) {
-                                componentSegments[segment.func_component_id] = [];
-                            }
-                            componentSegments[segment.func_component_id].push(segment);
-                        } else {
-                            unassignedSegments.push(segment);
-                        }
-                    });
-                }
-                
-                // Add each component
-                components.forEach(component => {
-                    const componentNode = document.createElement('div');
-                    componentNode.className = 'node';
-                    componentNode.dataset.id = component.id;
-                    componentNode.dataset.type = 'component';
-                    
-                    const nameElement = document.createElement('span');
-                    nameElement.className = 'caret node-component';
-                    nameElement.textContent = component.name || `Component ${component.index + 1}`;
-                    
-                    // Add description as a separate element
-                    const descElement = document.createElement('span');
-                    descElement.className = 'component-desc';
-                    descElement.textContent = component.short_description;
-                    
-                    const segmentsContainer = document.createElement('div');
-                    segmentsContainer.className = 'nested';
-                    
-                    // Add segments for this component
-                    const segments = componentSegments[component.id] || [];
-                    
-                    nameElement.onclick = function() {
-                        toggleNode(this);
-                        
-                        // If expanding and there are no children, load segments
-                        if (segmentsContainer.classList.contains('active') && segmentsContainer.children.length === 0) {
-                            if (segments.length > 0) {
-                                loadSegmentsIntoNode(segments, segmentsContainer);
-                            } else {
-                                segmentsContainer.innerHTML = '<div class="node">No segments in this component</div>';
-                            }
-                        }
-                        
-                        // Show component details in preview area
-                        displayComponentDetails(component, segments);
-                    };
-                    
-                    componentNode.appendChild(nameElement);
-                    componentNode.appendChild(descElement);
-                    componentNode.appendChild(segmentsContainer);
-                    parentElement.appendChild(componentNode);
-                });
-                
-                // Add unassigned segments node if there are any
-                if (unassignedSegments.length > 0) {
-                    const unassignedNode = document.createElement('div');
-                    unassignedNode.className = 'node';
-                    unassignedNode.dataset.type = 'unassigned';
-                    
-                    const unassignedLabel = document.createElement('span');
-                    unassignedLabel.className = 'caret';
-                    unassignedLabel.textContent = 'Unassigned Segments';
-                    
-                    const unassignedContainer = document.createElement('div');
-                    unassignedContainer.className = 'nested';
-                    
-                    unassignedLabel.onclick = function() {
-                        toggleNode(this);
-                        
-                        // Load unassigned segments if needed
-                        if (unassignedContainer.classList.contains('active') && unassignedContainer.children.length === 0) {
-                            loadSegmentsIntoNode(unassignedSegments, unassignedContainer);
-                        }
-                    };
-                    
-                    unassignedNode.appendChild(unassignedLabel);
-                    unassignedNode.appendChild(unassignedContainer);
-                    parentElement.appendChild(unassignedNode);
-                }
-            } catch (error) {
-                console.error('Error loading components:', error);
-                parentElement.innerHTML = '<div class="node">Error loading function components</div>';
-            }
+                funcNode.appendChild(nameElement);
+                funcNode.appendChild(childrenElement);
+                rootElement.appendChild(funcNode);
+            });
+        } catch (error) {
+            console.error('Error loading entry functions:', error);
+            document.getElementById('tree').innerHTML = 
+                '<p>Error loading function tree. Please try again later.</p>';
         }
-        
-        function loadSegmentsIntoNode(segments, parentElement) {
-            segments.forEach(segment => {
-                const segmentNode = document.createElement('div');
-                segmentNode.className = 'node';
-                segmentNode.dataset.type = 'segment';
-                segmentNode.dataset.segmentType = segment.type;
+    }
+
+    function toggleNode(element) {
+        element.classList.toggle('caret-down');
+        const nested = element.parentElement.querySelector('.nested');
+        if (nested) {
+            nested.classList.toggle('active');
+        }
+    }
+
+    async function loadFunctionComponents(repoHash, functionId, parentElement) {
+        try {
+            // Show loading
+            parentElement.innerHTML = '<div class="loading"></div>';
+            
+            // Fetch components
+            const response = await fetch(`/code/api/functions/${repoHash}/${functionId}/components`);
+            const components = await response.json();
+            
+            // Fetch function details to get segments
+            const funcResponse = await fetch(`/code/api/functions/${repoHash}/${functionId}`);
+            const functionData = await funcResponse.json();
+            
+            // Clear loading
+            parentElement.innerHTML = '';
+            
+            if (components.length === 0) {
+                // If no components found, display segments directly
+                parentElement.innerHTML = '<div class="node">No components found. Showing segments directly:</div>';
                 
+                // Add segments directly
+                if (functionData.segments && functionData.segments.length > 0) {
+                    loadSegmentsIntoNode(functionData.segments, parentElement, repoHash);
+                } else {
+                    parentElement.innerHTML += '<div class="node">No segments found</div>';
+                }
+                return;
+            }
+            
+            // Create a map of component IDs to segments
+            const componentSegments = {};
+            const unassignedSegments = [];
+            
+            if (functionData.segments) {
+                functionData.segments.forEach(segment => {
+                    if (segment.func_component_id) {
+                        if (!componentSegments[segment.func_component_id]) {
+                            componentSegments[segment.func_component_id] = [];
+                        }
+                        componentSegments[segment.func_component_id].push(segment);
+                    } else {
+                        unassignedSegments.push(segment);
+                    }
+                });
+            }
+            
+            // Add each component
+            components.forEach(component => {
+                const componentNode = document.createElement('div');
+                componentNode.className = 'node';
+                componentNode.dataset.id = component.id;
+                componentNode.dataset.type = 'component';
+                
+                const nameElement = document.createElement('span');
+                nameElement.className = 'caret node-component';
+                // Use short description as the title instead of "Component N"
+                nameElement.textContent = component.short_description || component.name || `Component ${component.index + 1}`;
+                
+                const segmentsContainer = document.createElement('div');
+                segmentsContainer.className = 'nested';
+                
+                // Add segments for this component
+                const segments = componentSegments[component.id] || [];
+                
+                nameElement.onclick = function() {
+                    toggleNode(this);
+                    
+                    // If expanding and there are no children, load segments
+                    if (segmentsContainer.classList.contains('active') && segmentsContainer.children.length === 0) {
+                        if (segments.length > 0) {
+                            loadSegmentsIntoNode(segments, segmentsContainer, repoHash);
+                        } else {
+                            segmentsContainer.innerHTML = '<div class="node">No segments in this component</div>';
+                        }
+                    }
+                    
+                    // Show component details in preview area
+                    displayComponentDetails(component, segments);
+                };
+                
+                componentNode.appendChild(nameElement);
+                componentNode.appendChild(segmentsContainer);
+                parentElement.appendChild(componentNode);
+            });
+            
+            // Add unassigned segments node if there are any
+            if (unassignedSegments.length > 0) {
+                const unassignedNode = document.createElement('div');
+                unassignedNode.className = 'node';
+                unassignedNode.dataset.type = 'unassigned';
+                
+                const unassignedLabel = document.createElement('span');
+                unassignedLabel.className = 'caret';
+                unassignedLabel.textContent = 'Unassigned Segments';
+                
+                const unassignedContainer = document.createElement('div');
+                unassignedContainer.className = 'nested';
+                
+                unassignedLabel.onclick = function() {
+                    toggleNode(this);
+                    
+                    // Load unassigned segments if needed
+                    if (unassignedContainer.classList.contains('active') && unassignedContainer.children.length === 0) {
+                        loadSegmentsIntoNode(unassignedSegments, unassignedContainer, repoHash);
+                    }
+                };
+                
+                unassignedNode.appendChild(unassignedLabel);
+                unassignedNode.appendChild(unassignedContainer);
+                parentElement.appendChild(unassignedNode);
+            }
+        } catch (error) {
+            console.error('Error loading components:', error);
+            parentElement.innerHTML = '<div class="node">Error loading function components</div>';
+        }
+    }
+    
+    function loadSegmentsIntoNode(segments, parentElement, repoHash) {
+        segments.forEach(segment => {
+            const segmentNode = document.createElement('div');
+            segmentNode.className = 'node';
+            segmentNode.dataset.type = 'segment';
+            segmentNode.dataset.segmentType = segment.type;
+            
+            // For call segments, make them expandable to show the target function
+            if (segment.type === 'call' && segment.target_function) {
+                const segmentLabel = document.createElement('span');
+                segmentLabel.className = 'caret node-segment-call';
+                segmentLabel.textContent = `Call: ${segment.target_function.name}() - Line ${segment.lineno}`;
+                
+                const targetContainer = document.createElement('div');
+                targetContainer.className = 'nested';
+                
+                segmentLabel.onclick = function() {
+                    toggleNode(this);
+                    displaySegmentDetails(segment);
+                    
+                    // If expanding and there are no children, load the target function's components
+                    if (targetContainer.classList.contains('active') && targetContainer.children.length === 0) {
+                        // Get the target function
+                        const targetFunc = segment.target_function;
+                        
+                        // Directly load the target function's components into the container
+                        loadFunctionComponents(repoHash, targetFunc.id, targetContainer);
+                    }
+                };
+                
+                segmentNode.appendChild(segmentLabel);
+                segmentNode.appendChild(targetContainer);
+            } else {
+                // For non-call segments (code, comment)
                 const segmentLabel = document.createElement('span');
                 segmentLabel.className = `node-segment-${segment.type}`;
                 
-                // Format label based on segment type
-                if (segment.type === 'call' && segment.target_function) {
-                    segmentLabel.textContent = `Call: ${segment.target_function.name}() - Line ${segment.lineno}`;
-                } else {
-                    // Create a preview of the content
-                    const contentPreview = segment.content.split("\n")[0].substring(0, 30);
-                    segmentLabel.textContent = `${segment.type.charAt(0).toUpperCase() + segment.type.slice(1)}: ${contentPreview}... (Line ${segment.lineno})`;
-                }
+                // Create a preview of the content
+                const contentPreview = segment.content.split("\n")[0].substring(0, 30);
+                segmentLabel.textContent = `${segment.type.charAt(0).toUpperCase() + segment.type.slice(1)}: ${contentPreview}... (Line ${segment.lineno})`;
                 
                 // Add click handler to show segment details
                 segmentLabel.onclick = function() {
@@ -494,229 +511,466 @@
                 };
                 
                 segmentNode.appendChild(segmentLabel);
-                parentElement.appendChild(segmentNode);
+            }
+            
+            parentElement.appendChild(segmentNode);
+        });
+    }
+
+    async function loadFunctionCallees(repoHash, functionId, parentElement) {
+        try {
+            // Show loading
+            parentElement.innerHTML = '<div class="loading"></div>';
+            
+            // Fetch callees
+            const response = await fetch(`/code/api/functions/${repoHash}/${functionId}/callees`);
+            const callees = await response.json();
+            
+            // Clear loading
+            parentElement.innerHTML = '';
+            
+            if (callees.length === 0) {
+                parentElement.innerHTML = '<div class="node">No function calls</div>';
+                return;
+            }
+            
+            // Add each callee
+            callees.forEach(callee => {
+                const calleeNode = document.createElement('div');
+                calleeNode.className = 'node';
+                calleeNode.dataset.id = callee.id;
+                calleeNode.dataset.type = 'function';
+                
+                const nameElement = document.createElement('span');
+                nameElement.className = 'caret node-function';
+                nameElement.textContent = callee.name;
+                nameElement.onclick = function() {
+                    toggleNode(this);
+                    loadFunctionDetails(repoHash, callee.id);
+                    
+                    // If expanding and there are no children, load components
+                    const nested = this.parentElement.querySelector('.nested');
+                    if (nested && nested.classList.contains('active') && nested.children.length === 0) {
+                        loadFunctionComponents(repoHash, callee.id, nested);
+                    }
+                };
+                
+                const childrenElement = document.createElement('div');
+                childrenElement.className = 'nested';
+                
+                calleeNode.appendChild(nameElement);
+                calleeNode.appendChild(childrenElement);
+                parentElement.appendChild(calleeNode);
             });
+        } catch (error) {
+            console.error('Error loading callees:', error);
+            parentElement.innerHTML = '<div class="node">Error loading function calls</div>';
         }
+    }
 
-        async function loadFunctionCallees(repoHash, functionId, parentElement) {
-            try {
-                // Show loading
-                parentElement.innerHTML = '<div class="loading"></div>';
-                
-                // Fetch callees
-                const response = await fetch(`/code/api/functions/${repoHash}/${functionId}/callees`);
-                const callees = await response.json();
-                
-                // Clear loading
-                parentElement.innerHTML = '';
-                
-                if (callees.length === 0) {
-                    parentElement.innerHTML = '<div class="node">No function calls</div>';
-                    return;
-                }
-                
-                // Add each callee
-                callees.forEach(callee => {
-                    const calleeNode = document.createElement('div');
-                    calleeNode.className = 'node';
-                    calleeNode.dataset.id = callee.id;
-                    calleeNode.dataset.type = 'function';
-                    
-                    const nameElement = document.createElement('span');
-                    nameElement.className = 'caret node-function';
-                    nameElement.textContent = callee.name;
-                    nameElement.onclick = function() {
-                        toggleNode(this);
-                        loadFunctionDetails(repoHash, callee.id);
-                        
-                        // If expanding and there are no children, load components
-                        const nested = this.parentElement.querySelector('.nested');
-                        if (nested && nested.classList.contains('active') && nested.children.length === 0) {
-                            loadFunctionComponents(repoHash, callee.id, nested);
-                        }
-                    };
-                    
-                    const childrenElement = document.createElement('div');
-                    childrenElement.className = 'nested';
-                    
-                    calleeNode.appendChild(nameElement);
-                    calleeNode.appendChild(childrenElement);
-                    parentElement.appendChild(calleeNode);
-                });
-            } catch (error) {
-                console.error('Error loading callees:', error);
-                parentElement.innerHTML = '<div class="node">Error loading function calls</div>';
-            }
-        }
-
-        async function loadFunctionDetails(repoHash, functionId) {
-            try {
-                // Highlight the selected node
-                const activeNodes = document.querySelectorAll('.active-node');
-                activeNodes.forEach(node => node.classList.remove('active-node'));
-                
-                const selectedNode = document.querySelector(`[data-id="${functionId}"] > span`);
-                if (selectedNode) {
-                    selectedNode.classList.add('active-node');
-                }
-                
-                // Show loading
-                const previewElement = document.getElementById('function-preview');
-                previewElement.innerHTML = '<div class="loading"></div>';
-                
-                // Fetch function details
-                const response = await fetch(`/code/api/functions/${repoHash}/${functionId}`);
-                const functionData = await response.json();
-                
-                // Build the content
-                let content = `
-                    <div class="function-details">
-                        <h2>${functionData.name}</h2>
-                        <div class="file-path">${functionData.full_name}</div>
-                        <div>File: ${functionData.file_path}</div>
-                        <div>Lines: ${functionData.lineno} - ${functionData.end_lineno}</div>
-                        ${functionData.is_entry ? '<div><strong>Entry Point</strong></div>' : ''}
-                        ${functionData.class_name ? `<div>Class: ${functionData.class_name}</div>` : ''}
-                        <div>Module: ${functionData.module_name}</div>
-                    </div>
-                `;
-                
-                // Add descriptions if available
-                if (functionData.short_description || functionData.input_output_description || functionData.long_description) {
-                    content += '<div class="function-descriptions">';
-                    
-                    if (functionData.short_description) {
-                        content += `<p><strong>Short Description:</strong> ${functionData.short_description}</p>`;
-                    }
-                    
-                    if (functionData.input_output_description) {
-                        content += `<p><strong>Input/Output:</strong> ${functionData.input_output_description}</p>`;
-                    }
-                    
-                    if (functionData.long_description) {
-                        content += `<p><strong>Detailed Description:</strong> ${functionData.long_description}</p>`;
-                    }
-                    
-                    content += '</div>';
-                }
-                
-                content += '<p>Expand the function in the tree to explore its components and segments.</p>';
-                
-                previewElement.innerHTML = content;
-            } catch (error) {
-                console.error('Error loading function details:', error);
-                document.getElementById('function-preview').innerHTML = 
-                    '<p>Error loading function details. Please try again later.</p>';
-            }
-        }
-        
-        function displayComponentDetails(component, segments) {
-            const previewElement = document.getElementById('function-preview');
-            
-            let content = `
-                <div class="component">
-                    <h2>${component.name || `Component ${component.index + 1}`}</h2>
-                    <p><strong>Description:</strong> ${component.short_description}</p>
-                    <p><strong>Lines:</strong> ${component.start_lineno} - ${component.end_lineno}</p>
-                    ${component.long_description ? `<p><strong>Detailed Description:</strong> ${component.long_description}</p>` : ''}
-                </div>
-            `;
-            
-            // Add segments preview
-            if (segments && segments.length > 0) {
-                content += '<h3>Segments in this Component</h3>';
-                
-                segments.forEach(segment => {
-                    const segmentType = segment.type;
-                    const segmentClass = `segment segment-${segmentType}`;
-                    
-                    content += `
-                        <div class="${segmentClass}">
-                            <div class="segment-header">
-                                ${segmentType.toUpperCase()} - Line ${segment.lineno}
-                                ${segment.end_lineno ? ` to ${segment.end_lineno}` : ''}
-                            </div>
-                            <div class="segment-body">
-                                <pre><code>${escapeHTML(segment.content)}</code></pre>
-                            </div>
-                    `;
-                    
-                    // For call segments, add target info
-                    if (segmentType === 'call' && segment.target_function) {
-                        const target = segment.target_function;
-                        content += `
-                            <div class="segment-target">
-                                <div><strong>Calls:</strong> ${target.name} (${target.full_name})</div>
-                                <div>File: ${target.file_path}</div>
-                                <div>Lines: ${target.lineno} - ${target.end_lineno}</div>
-                            </div>
-                        `;
-                    }
-                    
-                    content += '</div>'; // Close segment div
-                });
-            } else {
-                content += '<p>No segments found in this component.</p>';
-            }
-            
-            previewElement.innerHTML = content;
-        }
-        
-        function displaySegmentDetails(segment) {
-            const previewElement = document.getElementById('function-preview');
-            
-            // Highlight the selected node in the tree
+    async function loadFunctionDetails(repoHash, functionId) {
+        try {
+            // Highlight the selected node
             const activeNodes = document.querySelectorAll('.active-node');
             activeNodes.forEach(node => node.classList.remove('active-node'));
             
-            const segmentType = segment.type;
-            const segmentClass = `segment segment-${segmentType}`;
+            const selectedNode = document.querySelector(`[data-id="${functionId}"] > span`);
+            if (selectedNode) {
+                selectedNode.classList.add('active-node');
+            }
             
-            let content = `
-                <div class="${segmentClass}">
-                    <h2>${segmentType.toUpperCase()} Segment</h2>
-                    <div><strong>Lines:</strong> ${segment.lineno}${segment.end_lineno ? ` - ${segment.end_lineno}` : ''}</div>
-                    <div class="segment-body">
-                        <pre><code>${escapeHTML(segment.content)}</code></pre>
-                    </div>
+            // Show loading
+            const previewElement = document.getElementById('function-preview');
+            previewElement.innerHTML = '<div class="loading"></div>';
+            
+            // Fetch function details
+            const response = await fetch(`/code/api/functions/${repoHash}/${functionId}`);
+            const functionData = await response.json();
+            
+            // Build the upper panel content (summary)
+            let upperPanelContent = `
+                <div class="function-details">
+                    <h2>${functionData.name}</h2>
+                    <div class="file-path">${functionData.full_name}</div>
+                    <div>File: ${functionData.file_path}</div>
+                    <div>Lines: ${functionData.lineno} - ${functionData.end_lineno}</div>
+                    ${functionData.is_entry ? '<div><strong>Entry Point</strong></div>' : ''}
+                    ${functionData.class_name ? `<div>Class: ${functionData.class_name}</div>` : ''}
+                    <div>Module: ${functionData.module_name}</div>
+                </div>
             `;
             
-            // For call segments, add target info
-            if (segmentType === 'call' && segment.target_function) {
-                const target = segment.target_function;
-                content += `
-                    <div class="segment-target">
-                        <h3>Target Function</h3>
-                        <div><strong>Name:</strong> ${target.name} (${target.full_name})</div>
-                        <div><strong>File:</strong> ${target.file_path}</div>
-                        <div><strong>Lines:</strong> ${target.lineno} - ${target.end_lineno}</div>
-                        <div>
-                            <a href="#" onclick="event.preventDefault(); 
-                               const repoHash = document.querySelector('.repo-info').dataset.repoHash;
-                               loadFunctionDetails(repoHash, '${target.id}');">
-                                View Target Function
-                            </a>
+            // Add descriptions if available
+            if (functionData.short_description || functionData.input_output_description || functionData.long_description) {
+                upperPanelContent += '<div class="function-descriptions">';
+                
+                if (functionData.short_description) {
+                    upperPanelContent += `<p><strong>Short Description:</strong> ${functionData.short_description}</p>`;
+                }
+                
+                if (functionData.input_output_description) {
+                    upperPanelContent += `<p><strong>Input/Output:</strong> ${functionData.input_output_description}</p>`;
+                }
+                
+                if (functionData.long_description) {
+                    upperPanelContent += `<p><strong>Detailed Description:</strong> ${functionData.long_description}</p>`;
+                }
+                
+                upperPanelContent += '</div>';
+            }
+            
+            // Build the lower panel content (full function code with segments highlighted)
+            let lowerPanelContent = await buildFullFunctionCodeView(functionData, null);
+            
+            // Combine panels into the preview element
+            previewElement.innerHTML = `
+                <div class="upper-panel">
+                    ${upperPanelContent}
+                </div>
+                <div class="lower-panel">
+                    <h3>Complete Function Code</h3>
+                    ${lowerPanelContent}
+                </div>
+            `;
+        } catch (error) {
+            console.error('Error loading function details:', error);
+            document.getElementById('function-preview').innerHTML = 
+                '<p>Error loading function details. Please try again later.</p>';
+        }
+    }
+    
+    function displayComponentDetails(component, segments) {
+        const previewElement = document.getElementById('function-preview');
+        
+        // First, get the function info from the component ID
+        const functionId = component.function_id || component.id.split(':')[1];
+        // console.warn(component.id)
+        const repoHash = document.querySelector('.repo-info').dataset.repoHash;
+        
+        // Build the upper panel content (component summary)
+        let upperPanelContent = `
+            <div class="component">
+                <h2>${component.short_description || component.name || `Component ${component.index + 1}`}</h2>
+                <p><strong>Lines:</strong> ${component.start_lineno} - ${component.end_lineno}</p>
+                ${component.long_description ? `<p><strong>Detailed Description:</strong> ${component.long_description}</p>` : ''}
+            </div>
+        `;
+        
+        // Add segments summary
+        if (segments && segments.length > 0) {
+            upperPanelContent += '<h3>Segments in this Component</h3>';
+            upperPanelContent += '<div class="segments-summary">';
+            
+            segments.forEach(segment => {
+                const segmentType = segment.type;
+                upperPanelContent += `
+                    <div class="segment-summary segment-${segmentType}">
+                        <div class="segment-header">
+                            ${segmentType.toUpperCase()} - Line ${segment.lineno}
+                            ${segment.end_lineno ? ` to ${segment.end_lineno}` : ''}
                         </div>
                     </div>
                 `;
+            });
+            
+            upperPanelContent += '</div>';
+        }
+        
+        // Fetch the function details to display the full code
+        fetch(`/code/api/functions/${repoHash}/${functionId}`)
+            .then(response => response.json())
+            .then(async functionData => {
+                // Build the lower panel content (full function code with component highlighted)
+                let lowerPanelContent = await buildFullFunctionCodeView(functionData, component);
+                
+                // Combine panels into the preview element
+                previewElement.innerHTML = `
+                    <div class="upper-panel">
+                        ${upperPanelContent}
+                    </div>
+                    <div class="lower-panel">
+                        <h3>Complete Function Code</h3>
+                        ${lowerPanelContent}
+                    </div>
+                `;
+            })
+            .catch(error => {
+                console.error('Error loading function for component:', error);
+                // Still show the upper panel even if we can't get the function code
+                previewElement.innerHTML = `
+                    <div class="upper-panel">
+                        ${upperPanelContent}
+                    </div>
+                    <div class="lower-panel">
+                        <p>Error loading function code. Please try again later.</p>
+                    </div>
+                `;
+            });
+    }
+    
+    function displaySegmentDetails(segment) {
+        const previewElement = document.getElementById('function-preview');
+        
+        // Get the function ID from the segment
+        const functionId = segment.function_id || segment.id.split(':')[0];
+        const repoHash = document.querySelector('.repo-info').dataset.repoHash;
+        
+        // Highlight the selected node in the tree
+        const activeNodes = document.querySelectorAll('.active-node');
+        activeNodes.forEach(node => node.classList.remove('active-node'));
+        
+        const segmentType = segment.type;
+        
+        // Build the upper panel content (segment summary)
+        let upperPanelContent = `
+            <div class="segment segment-${segmentType}">
+                <h2>${segmentType.toUpperCase()} Segment</h2>
+                <div><strong>Lines:</strong> ${segment.lineno}${segment.end_lineno ? ` - ${segment.end_lineno}` : ''}</div>
+                <div class="segment-body">
+                    <pre><code>${escapeHTML(segment.content)}</code></pre>
+                </div>
+        `;
+        
+        // For call segments, add target info
+        if (segmentType === 'call' && segment.target_function) {
+            const target = segment.target_function;
+            upperPanelContent += `
+                <div class="segment-target">
+                    <h3>Target Function</h3>
+                    <div><strong>Name:</strong> ${target.name} (${target.full_name})</div>
+                    <div><strong>File:</strong> ${target.file_path}</div>
+                    <div><strong>Lines:</strong> ${target.lineno} - ${target.end_lineno}</div>
+                    <div>
+                        <a href="#" onclick="event.preventDefault(); 
+                           const repoHash = document.querySelector('.repo-info').dataset.repoHash;
+                           loadFunctionDetails(repoHash, '${target.id}');">
+                            View Target Function
+                        </a>
+                    </div>
+                </div>
+            `;
+        }
+        
+        upperPanelContent += '</div>'; // Close segment div
+        
+        // If it's a call segment, show the target function in the lower panel
+        if (segmentType === 'call' && segment.target_function) {
+            // Get the target function details
+            fetch(`/code/api/functions/${repoHash}/${segment.target_function.id}`)
+                .then(response => response.json())
+                .then(async targetFunction => {
+                    // Build the lower panel with the target function
+                    let lowerPanelContent = await buildFullFunctionCodeView(targetFunction, null);
+                    
+                    // Combine panels
+                    previewElement.innerHTML = `
+                        <div class="upper-panel">
+                            ${upperPanelContent}
+                        </div>
+                        <div class="lower-panel">
+                            <h3>Target Function Code</h3>
+                            ${lowerPanelContent}
+                        </div>
+                    `;
+                })
+                .catch(error => {
+                    console.error('Error loading target function:', error);
+                    // Show just the current function if we can't get the target
+                    showCurrentFunctionForSegment();
+                });
+        } else {
+            // For non-call segments, show the current function
+            showCurrentFunctionForSegment();
+        }
+        
+        // Helper to show the current function for this segment
+        function showCurrentFunctionForSegment() {
+            fetch(`/code/api/functions/${repoHash}/${functionId}`)
+                .then(response => response.json())
+                .then(async functionData => {
+                    // Build the lower panel with the current function, highlighting the segment
+                    let lowerPanelContent = await buildFullFunctionCodeView(functionData, null, segment);
+                    
+                    // Combine panels
+                    previewElement.innerHTML = `
+                        <div class="upper-panel">
+                            ${upperPanelContent}
+                        </div>
+                        <div class="lower-panel">
+                            <h3>Complete Function Code</h3>
+                            ${lowerPanelContent}
+                        </div>
+                    `;
+                })
+                .catch(error => {
+                    console.error('Error loading function for segment:', error);
+                    previewElement.innerHTML = `
+                        <div class="upper-panel">
+                            ${upperPanelContent}
+                        </div>
+                        <div class="lower-panel">
+                            <p>Error loading function code. Please try again later.</p>
+                        </div>
+                    `;
+                });
+        }
+    }
+    
+    // Helper function to build a complete function code view with highlighting
+    async function buildFullFunctionCodeView(functionData, highlightComponent = null, highlightSegment = null) {
+        try {
+            // Use the file_path and line numbers to get the complete function code
+            const filePath = functionData.file_path;
+            const startLine = functionData.lineno;
+            const endLine = functionData.end_lineno;
+            
+            // Fetch the file content using an API endpoint (you'll need to implement this)
+            // For now, we'll reconstruct from segments as a fallback
+            let fileLines = [];
+            let useSegmentsFallback = true;
+            
+            // Try to get file content from repository if we have required info
+            if (filePath && startLine && endLine) {
+                try {
+                    if (filePath && startLine && endLine) {
+                        try {
+                            const repoHash = document.querySelector('.repo-info').dataset.repoHash;
+                            const response = await fetch(`/code/api/file?path=${encodeURIComponent(filePath)}&repo_hash=${repoHash}&line_start=${startLine}&line_end=${endLine}`);
+                            
+                            if (response.ok) {
+                                const fileContent = await response.text();
+                                fileLines = fileContent.split('\n');
+                                useSegmentsFallback = false;
+                            } else {
+                                console.warn('Error fetching file content, fallback to segments');
+                            }
+                        } catch (fileError) {
+                            console.warn('Error reading file directly, falling back to segments:', fileError);
+                            // Continue with segments fallback
+                        }
+                    }
+                } catch (fileError) {
+                    console.warn('Error reading file directly, falling back to segments:', fileError);
+                    // Continue with segments fallback
+                }
             }
             
-            content += '</div>'; // Close segment div
+            // Fallback: reconstruct from segments
+            if (useSegmentsFallback) {
+                // Sort segments by line number to ensure correct order
+                const sortedSegments = [...functionData.segments].sort((a, b) => a.lineno - b.lineno);
+                
+                // Create an array to hold all lines of the function
+                const totalLines = endLine - startLine + 1;
+                fileLines = Array(totalLines).fill('');
+                
+                // Fill in content from segments
+                for (const segment of sortedSegments) {
+                    const segmentContent = segment.content.split('\n');
+                    const relStartLine = segment.lineno;
+                    
+                    for (let i = 0; i < segmentContent.length; i++) {
+                        const fileLineIndex = relStartLine - 1 + i;
+                        if (fileLineIndex >= 0 && fileLineIndex < totalLines) {
+                            fileLines[fileLineIndex] = segmentContent[i];
+                        }
+                    }
+                }
+            }
             
-            previewElement.innerHTML = content;
+            // Prepare the code with syntax highlighting for segments
+            let codeLines = [];
+            
+            // Use different background colors for different segment types
+            const segmentColors = {
+                'code': 'rgba(255, 253, 231, 0.3)',   // Light yellow (faint)
+                'call': 'rgba(255, 232, 230, 0.3)',   // Light red (faint)
+                'comment': 'rgba(245, 245, 245, 0.3)' // Light gray (faint)
+            };
+            
+            const strongHighlightColors = {
+                'code': 'rgba(255, 253, 231, 0.8)',    // Stronger yellow
+                'call': 'rgba(255, 232, 230, 0.8)',    // Stronger red
+                'comment': 'rgba(245, 245, 245, 0.8)'  // Stronger gray
+            };
+            
+            // Function to determine if a line belongs to a segment
+            function lineInSegment(lineNum, segment) {
+                return lineNum >= segment.lineno && 
+                       (segment.end_lineno ? lineNum <= segment.end_lineno : lineNum === segment.lineno);
+            }
+            
+            // Function to determine if a line belongs to a component
+            function lineInComponent(lineNum, component) {
+                // Convert to absolute line numbers for comparison
+                const absLine = functionData.lineno + lineNum - 1;
+                return absLine >= component.start_lineno && absLine <= component.end_lineno;
+            }
+            
+            // Build code lines with appropriate highlighting
+            for (let i = 0; i < fileLines.length; i++) {
+                const currentLine = i + 1; // Relative line number (1-based)
+                const lineContent = fileLines[i] || '';
+                
+                // Find the segment that contains this line
+                const segment = functionData.segments.find(seg => lineInSegment(currentLine, seg));
+                
+                // Determine the background color and highlighting
+                let backgroundColor = 'transparent';
+                let strongHighlight = false;
+                
+                if (segment) {
+                    // Basic segment coloring
+                    backgroundColor = segmentColors[segment.type];
+                    
+                    // Strong highlight if this segment is specifically selected
+                    if (highlightSegment && segment.id === highlightSegment.id) {
+                        backgroundColor = strongHighlightColors[segment.type];
+                        strongHighlight = true;
+                    }
+                }
+                
+                // Component highlighting overrides segment highlighting if specifically selected
+                if (highlightComponent && lineInComponent(currentLine, highlightComponent)) {
+                    backgroundColor = 'rgba(187, 222, 251, 0.5)'; // Stronger blue highlight for component
+                    strongHighlight = true;
+                }
+                
+                // Add the line with appropriate styling
+                codeLines.push(`
+                    <div class="code-line ${strongHighlight ? 'strong-highlight' : ''}" 
+                         style="background-color: ${backgroundColor};">
+                        <span class="line-number">${currentLine}</span>
+                        <span class="line-content">${escapeHTML(lineContent)}</span>
+                    </div>
+                `);
+            }
+            
+            // Return the complete code view
+            return `
+                <div class="function-code-view">
+                    <div class="code-container">
+                        ${codeLines.join('')}
+                    </div>
+                </div>
+            `;
+        } catch (error) {
+            console.error('Error building function code view:', error);
+            return `<p>Error displaying function code: ${error.message}</p>`;
         }
+    }
 
-        // Helper function to escape HTML
-        function escapeHTML(str) {
-            if (!str) return '';
-            return str
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#039;');
-        }
-    </script>
-    <script src="/code/static/js/tree.js"></script>
+    // Helper function to escape HTML
+    function escapeHTML(str) {
+        if (!str) return '';
+        return str
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+</script>
+<!-- <script src="/code/static/js/tree.js"></script> -->
 </body>
 </html>

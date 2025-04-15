@@ -65,6 +65,88 @@ def show_function_tree(repo_hash):
 def serve_tree_js():
     return send_from_directory(os.path.join(current_app.root_path, 'static/js'), 'tree.js')
 
+@bp.route('/api/file', methods=['GET'])
+def get_file_content():
+    """
+    API endpoint to get file content from a local repository
+    
+    Parameters:
+    - path: Path to the file (relative or absolute)
+    - repo_hash: Optional repository hash to locate the file in a specific repo
+    - line_start: Optional starting line (1-indexed)
+    - line_end: Optional ending line (1-indexed)
+    
+    Returns:
+        File content as text
+    """
+    file_path = request.args.get('path')
+    repo_hash = request.args.get('repo_hash')
+    line_start = request.args.get('line_start', type=int)
+    line_end = request.args.get('line_end', type=int)
+
+    if not file_path:
+        return jsonify({"error": "File path is required"}), 400
+    
+    try:
+        # If repo_hash is provided, try to find the file in that repository
+        if repo_hash:
+            repo = Repository.query.get(repo_hash)
+            if not repo:
+                return jsonify({"error": f"Repository with hash {repo_hash} not found"}), 404
+                
+            # Use REPO_CACHE_DIR from config
+            repos_dir = current_app.config.get('REPO_CACHE_DIR', '/tmp/repos')
+            repo_name = repo.url.split("/")[-1].replace(".git", "")
+            repo_path = os.path.join(repos_dir, repo_name)
+            
+            # Check if the file path is absolute
+            if os.path.isabs(file_path):
+                # Make sure it's within the repo path for security
+                if not file_path.startswith(repo_path):
+                    # Try to find the file in the repo by relative path
+                    rel_path = os.path.basename(file_path)
+                    for root, _, files in os.walk(repo_path):
+                        if rel_path in files:
+                            file_path = os.path.join(root, rel_path)
+                            break
+                    else:
+                        # If we can't find the file by name, use the original path
+                        # but make sure it's accessible
+                        if not os.path.exists(file_path) or not os.access(file_path, os.R_OK):
+                            return jsonify({"error": "File not found or not accessible"}), 404
+            else:
+                # If it's a relative path, join with repo path
+                file_path = os.path.join(repo_path, file_path)
+        
+        # Security check: verify file exists and is readable
+        if not os.path.exists(file_path) or not os.access(file_path, os.R_OK):
+            return jsonify({"error": "File not found or not accessible"}), 404
+            
+        # Read the file content
+        with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
+            if line_start and line_end:
+                # Skip to the start line (1-indexed to 0-indexed)
+                for _ in range(line_start - 1):
+                    f.readline()
+                
+                # Read the requested lines
+                lines = []
+                for _ in range(line_end - line_start + 1):
+                    line = f.readline()
+                    if not line:  # EOF
+                        break
+                    lines.append(line)
+                
+                content = ''.join(lines)
+            else:
+                content = f.read()
+                
+        return content
+            
+    except Exception as e:
+        current_app.logger.error(f"Error reading file: {str(e)}")
+        return jsonify({"error": f"Error reading file: {str(e)}"}), 500
+    
 @bp.route('/api/functions/<repo_hash>/entries')
 def get_entry_functions(repo_hash):
     """Get all entry point functions for a repository"""

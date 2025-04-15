@@ -11,6 +11,7 @@ from dulwich.repo import Repo
 import tempfile
 import shutil
 import logging
+import hashlib
 from sqlalchemy.ext.declarative import declarative_base
 from dotenv import load_dotenv
 load_dotenv()
@@ -25,79 +26,29 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Import custom modules for database models and AST parsing
-try:
-    # Try to import from app module first (for installed usage)
-    from app.models import Repository, Function, Segment, FunctionCall, FuncComponent
-    from app.utils.llm_function_analyzer import set_api_key, analyze_function
-except ImportError:
-    # For standalone script, define models here
-    from sqlalchemy import Column, String, Integer, Boolean, Text, ForeignKey, DateTime
-    from sqlalchemy.dialects.postgresql import JSON
-    from sqlalchemy.orm import relationship
-    
-    class Repository(Base):
-        __tablename__ = 'repositories'
-        id = Column(String(64), primary_key=True)
-        url = Column(String(512), unique=True)
-        entry_points = Column(JSON)
-        parsed_at = Column(DateTime)
-    
-    class Function(Base):
-        __tablename__ = 'functions'
-        id = Column(String(128), primary_key=True)
-        repo_id = Column(String(64), ForeignKey('repositories.id', ondelete='CASCADE'))
-        name = Column(String(128))
-        full_name = Column(String(512))
-        file_path = Column(String(512))
-        lineno = Column(Integer)
-        end_lineno = Column(Integer)
-        is_entry = Column(Boolean, default=False)
-        class_name = Column(String(128), nullable=True)
-        module_name = Column(String(256))
-        short_description = Column(String(255), nullable=True)
-        input_output_description = Column(Text, nullable=True)
-        long_description = Column(Text, nullable=True)
-    
-    class FuncComponent(Base):
-        __tablename__ = 'func_components'
-        id = Column(String(256), primary_key=True)
-        function_id = Column(String(128), ForeignKey('functions.id', ondelete='CASCADE'))
-        short_description = Column(String(255))
-        long_description = Column(Text)
-        start_lineno = Column(Integer)
-        end_lineno = Column(Integer)
-        index = Column(Integer)
-        component_data = Column(JSON, nullable=True)
-    
-    class Segment(Base):
-        __tablename__ = 'segments'
-        id = Column(String(256), primary_key=True)
-        function_id = Column(String(128), ForeignKey('functions.id', ondelete='CASCADE'))
-        type = Column(String(32))
-        content = Column(Text)
-        lineno = Column(Integer)
-        end_lineno = Column(Integer, nullable=True)
-        index = Column(Integer)
-        target_id = Column(String(128), ForeignKey('functions.id', ondelete='SET NULL'), nullable=True)
-        func_component_id = Column(String(256), ForeignKey('func_components.id', ondelete='SET NULL'), nullable=True)
-        segment_data = Column(JSON, nullable=True)
-    
-    class FunctionCall(Base):
-        __tablename__ = 'function_calls'
-        caller_id = Column(String(128), ForeignKey('functions.id', ondelete='CASCADE'), primary_key=True)
-        callee_id = Column(String(128), ForeignKey('functions.id', ondelete='CASCADE'), primary_key=True)
-        call_count = Column(Integer, default=1)
-        call_data = Column(JSON, nullable=True)
-        
-
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from app.utils.ast_parser import build_registry, build_function_LLM_analysis, build_segments, find_entry_points, build_tree_from_function
 from app.utils.llm_function_analyzer import set_api_key, analyze_function
-try:
-    from app.utils.ast_parser import scan_project, find_entry_points, build_tree_from_function, print_tree, print_function_info
-except ImportError:
-    # For standalone running, import from the current directory
-    from app.utils.ast_parser import scan_project, find_entry_points, build_tree_from_function, print_tree, print_function_info
+from app.utils.registry_utls import load_registry, save_registry
+from app.models import Repository, Function, Segment, FunctionCall, FuncComponent
+
+
+def hash_url(url, algorithm='sha256'):
+    # Convert the URL to bytes
+    url_bytes = url.encode('utf-8')
+    
+    # Initialize the hasher based on the specified algorithm
+    if algorithm.lower() == 'sha256':
+        hash_object = hashlib.sha256(url_bytes)
+    elif algorithm.lower() == 'sha1':
+        hash_object = hashlib.sha1(url_bytes)
+    elif algorithm.lower() == 'md5':
+        hash_object = hashlib.md5(url_bytes)
+    else:
+        raise ValueError("Unsupported algorithm. Use sha256, sha1, or md5.")
+    
+    # Return the hexadecimal digest of the hash
+    return hash_object.hexdigest()
 
 def store_registry_in_database(registry, repo_url, repo_hash, entry_points, session):
     """
@@ -285,33 +236,8 @@ def store_registry_in_database(registry, repo_url, repo_hash, entry_points, sess
     return repo_record
 
 
-def clone_repository(repo_url, cache_dir='/tmp/repos'):
-    """
-    Clone a git repository
-    
-    Args:
-        repo_url: Repository URL
-        cache_dir: Directory to cache repositories
-        
-    Returns:
-        Tuple of (repo object, repo path, repo hash)
-    """
-    from ..utils.git_manager import GitManager
-    
-    # Ensure cache directory exists
-    os.makedirs(cache_dir, exist_ok=True)
-    
-    # Clone repository
-    git_manager = GitManager(cache_dir)
-    repo, repo_path = git_manager.clone(repo_url)
-    
-    # Get repository hash
-    repo_hash = repo.head().decode('utf-8')
-    
-    return repo, repo_path, repo_hash
 
-
-def build_and_store_code_tree(repo_url, entry_points, db_uri, verbose=False):
+def build_and_store_code_tree(repo_url, entry_points, db_uri, verbose=False, reuse_registry = [False, False, False]):
     """
     Main function to build a code tree and store it in the database
     
@@ -325,7 +251,10 @@ def build_and_store_code_tree(repo_url, entry_points, db_uri, verbose=False):
         Repository hash
     """
     # Create temporary directory for repository
-    temp_dir = tempfile.mkdtemp(prefix="code_tree_")
+    repo_clone_dir = os.path.join("/home/webadmin/projects/code", "repos")
+    # temp_dir = tempfile.mkdtemp(prefix="code_tree_")
+    
+    registry_dir = "/home/webadmin/projects/code/cache/registry"
     try:
         # Clone the repository
         if verbose:
@@ -342,17 +271,19 @@ def build_and_store_code_tree(repo_url, entry_points, db_uri, verbose=False):
                 from dulwich.porcelain import clone
                 
                 repo_name = repo_url.split("/")[-1].replace(".git", "")
-                repo_path = os.path.join(self.cache_dir, repo_name)
+                repo_hash = hash_url(repo_url, 'sha256')
+                repo_path = os.path.join(self.cache_dir, repo_hash)
+                print(f"Cloning repository to {repo_path}...")
                 
                 if not os.path.exists(repo_path):
                     clone(repo_url, repo_path, depth=1)
                 
-                return Repo(repo_path), repo_path
+                return Repo(repo_path), repo_path, repo_hash
         
         # Clone repository
-        git_manager = SimpleGitManager(temp_dir)
-        repo, repo_path = git_manager.clone(repo_url)
-        repo_hash = repo.head().decode('utf-8')
+        git_manager = SimpleGitManager(repo_clone_dir)
+        repo, repo_path, repo_hash = git_manager.clone(repo_url)
+        
         
         if verbose:
             print(f"Repository cloned to {repo_path}")
@@ -362,7 +293,10 @@ def build_and_store_code_tree(repo_url, entry_points, db_uri, verbose=False):
         if verbose:
             print("Scanning project for functions...")
         
-        registry = scan_project(repo_path)
+        if reuse_registry[0]:
+            registry = load_registry(os.path.join(registry_dir, f"{repo_hash}_1"))
+        else:
+            registry = build_registry(repo_path)
         
         if verbose:
             print(f"Found {len(registry.functions)} functions")
@@ -396,6 +330,21 @@ def build_and_store_code_tree(repo_url, entry_points, db_uri, verbose=False):
         if not entry_point_ids:
             print("No entry points found. Please check your entry point specifications.")
             return None
+        
+        save_registry(registry, os.path.join(registry_dir,f"{repo_hash}_1"))
+        
+        if reuse_registry[1]:
+            registry = load_registry(os.path.join(registry_dir, f"{repo_hash}_2"))
+        else:
+            registry = build_function_LLM_analysis(registry)
+            save_registry(registry, os.path.join(registry_dir,f"{repo_hash}_2"))
+        
+        if reuse_registry[2]:
+            registry = load_registry(os.path.join(registry_dir, f"{repo_hash}_3"))
+        else:
+            registry = build_segments(registry)
+            save_registry(registry, os.path.join(registry_dir,f"{repo_hash}_3"))
+        
         
         # Connect to the database
         if verbose:
@@ -434,7 +383,8 @@ def build_and_store_code_tree(repo_url, entry_points, db_uri, verbose=False):
     
     finally:
         # Clean up
-        shutil.rmtree(temp_dir)
+        # shutil.rmtree(temp_dir)
+        print("Done building and uploading tree")
 
 
 def query_and_print_tree(repo_hash, entry_id, db_uri, max_level=2, verbose=False):

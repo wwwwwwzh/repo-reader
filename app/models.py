@@ -18,7 +18,7 @@ class Function(db.Model):
     """Function model for storing function information"""
     __tablename__ = 'functions'
     
-    id = db.Column(db.String(128), primary_key=True)  # Composite ID: repo_hash:function_id
+    id = db.Column(db.String(128), primary_key=True)  # 
     repo_id = db.Column(db.String(64), db.ForeignKey('repositories.id', ondelete='CASCADE'))
     name = db.Column(db.String(128))  # Short name
     full_name = db.Column(db.String(512))  # Full qualified name

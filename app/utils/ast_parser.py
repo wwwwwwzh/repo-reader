@@ -163,6 +163,35 @@ class FunctionScanner(std_ast.NodeVisitor):
         
         # Visit function body
         self.generic_visit(node)
+        
+    def visit_If(self, node):
+        """Handle if statements - looking for if __name__ == "__main__": blocks"""
+        # Check if this is an if __name__ == "__main__" block
+        if (isinstance(node.test, std_ast.Compare) and
+            isinstance(node.test.left, std_ast.Name) and
+            node.test.left.id == "__name__" and
+            len(node.test.ops) == 1 and
+            isinstance(node.test.ops[0], std_ast.Eq) and
+            len(node.test.comparators) == 1 and
+            isinstance(node.test.comparators[0], std_ast.Constant) and
+            node.test.comparators[0].value == "__main__"):
+            
+            # This is a main block, register it as a function
+            lineno = node.lineno
+            end_lineno = get_node_end_lineno(node)
+            
+            # Add as a special function named "__main__"
+            self.registry.add_function(
+                self.module_name,
+                "__main__",  # Special name for the main block
+                self.file_path,
+                lineno,
+                end_lineno,
+                None  # No class context for main block
+            )
+        
+        # Continue visiting the if statement body
+        self.generic_visit(node)
 
 class SimpleImportTracker(std_ast.NodeVisitor):
     """Simple tracker that just records which modules are imported in a file"""
@@ -631,13 +660,10 @@ def extract_segments(file_path, function_info, call_segments):
     
     return final_segments
 
-
-
-def scan_project(project_root):
+def build_registry(project_root):
     """
-    Scan an entire project to build a function registry with all functions,
-    their calls, and segments
-    
+    Scan an entire project to build a function registry with all functions
+        
     Args:
         project_root: Path to the project root directory
         
@@ -674,9 +700,10 @@ def scan_project(project_root):
             continue
     
     logging.info(f"Found {registry.functions} functions")
-    
-    # Second pass: Use LLM to analyze functions and extract components
+    return registry
 
+def build_function_LLM_analysis(registry):
+    # Second pass: Use LLM to analyze functions and extract components
     print("Second pass: Analyzing functions with LLM...")
     
     set_api_key(os.environ.get("DEEPSEEK_API_KEY"), provider="deepseek")
@@ -689,8 +716,6 @@ def scan_project(project_root):
         # Note: lineno and end_lineno are absolute (file-based) line numbers
         logging.info(f"{func_id}, {func_info}")
         func_content = extract_function_content(file_path, func_info['lineno'], func_info['end_lineno'])
-        
-        
         
         try:
             # Call LLM to analyze the function
@@ -726,7 +751,9 @@ def scan_project(project_root):
         except Exception as e:
             print(f"Error analyzing function {func_info['full_name']} with LLM: {e}")
             traceback.print_exc()
-
+    return registry
+            
+def build_segments(registry):
     # Third pass: Analyze function calls and build segments
     logging.info("Third pass: Analyzing function calls and building segments...")
     for func_id, func_info in registry.functions.items():
@@ -770,7 +797,7 @@ def scan_project(project_root):
                 
         except Exception as e:
             print(f"Error analyzing function {func_info['full_name']}: {e}")
-    
+            traceback.print_exc()
     return registry
 
 

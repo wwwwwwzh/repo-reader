@@ -154,13 +154,21 @@
         .active {
             display: block;
         }
-        .sticky-parent {
+        /* Replace the sticky-parent class with these classes */
+        .sticky-caret {
             position: sticky;
-            top: 0;
             background-color: #f5f5f5;
-            z-index: 5;
             padding: 5px 0;
             border-bottom: 1px solid #ddd;
+            width: 100%;
+            display: block;
+            /* Let JavaScript set these dynamically */
+            /* top and z-index will be set via JS */
+        }
+
+        /* Create a container for the actual content to maintain proper layout */
+        .caret-content {
+            display: inline-block;
         }
         pre {
             background-color: #f9f9f9;

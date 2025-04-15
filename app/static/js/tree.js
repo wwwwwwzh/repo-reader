@@ -1,6 +1,10 @@
 // Global variables for state management
 let currentFunctionId = null;
 let repoHash = null;
+const treeNav = document.querySelector('.tree-nav');
+
+treeNav.addEventListener('scroll', updateStickyPositions);
+window.addEventListener('resize', updateStickyPositions); // optional but handy
 
 document.addEventListener('DOMContentLoaded', () => {
     // Get repository hash from data attribute
@@ -97,6 +101,7 @@ function addFunctionNodeToTree(func, parentElement, repoHash) {
 }
 
 // Toggle expansion of a tree node
+// Updated toggleNode function with proper style reset
 function toggleNode(element) {
     element.classList.toggle('caret-down');
     const nested = element.parentElement.querySelector('.nested');
@@ -104,17 +109,76 @@ function toggleNode(element) {
     if (nested) {
         nested.classList.toggle('active');
         
-        // Handle sticky headers for parent nodes
+        // Handle sticky headers when this is a function, component or call segment
         const parentNode = element.parentElement;
-        if (parentNode.dataset.type === 'function' || parentNode.dataset.type === 'component') {
+        const nodeType = parentNode.dataset.type;
+        
+        if (nodeType === 'function' || 
+            nodeType === 'component' || 
+            (nodeType === 'segment' && parentNode.dataset.segmentType === 'call')) {
+            
             if (nested.classList.contains('active')) {
-                parentNode.classList.add('sticky-parent');
+                // Add sticky class to the caret element itself
+                element.classList.add('sticky-caret');
+                
+                // Update sticky positions for all carets
+                updateStickyPositions();
             } else {
-                parentNode.classList.remove('sticky-parent');
+                // Remove sticky class from this caret
+                element.classList.remove('sticky-caret');
+                
+                // Important: Reset the styles when removing sticky
+                element.style.top = '';
+                element.style.zIndex = '';
+                
+                // Reset styles for all child sticky carets in this nested section
+                const childCarets = nested.querySelectorAll('.sticky-caret');
+                childCarets.forEach(childCaret => {
+                    childCaret.classList.remove('sticky-caret');
+                    childCaret.style.top = '';
+                    childCaret.style.zIndex = '';
+                });
+                
+                // Update sticky positions again
+                updateStickyPositions();
             }
         }
     }
 }
+
+function updateStickyPositions() {
+    // Find all sticky carets
+    const stickyCarets = document.querySelectorAll('.sticky-caret');
+    
+    // Process each sticky caret
+    stickyCarets.forEach(caret => {
+        // Calculate nesting level by counting parent .nested elements
+        let level = 0;
+        let current = caret;
+        let parent = current.parentElement;
+        
+        while (parent) {
+            if (parent.classList.contains('nested')) {
+                level++;
+            }
+            parent = parent.parentElement;
+        }
+        
+        // Set the top position (25px per level to account for the header height)
+        const topPosition = level * 25;
+        
+        // IMPORTANT: Make sure to use +'px' for the top value
+        caret.style.top = topPosition + 'px';
+        
+        // Set z-index inversely proportional to level (higher = lower z-index)
+        caret.style.zIndex = (100 - level).toString();
+        
+        // Optional: Add this to console to verify values are being set
+        console.log(`Caret "${caret.textContent.trim()}" set to top: ${topPosition}px, z-index: ${100 - level}`);
+    });
+}
+
+
 
 // Load function components
 async function loadFunctionComponents(repoHash, functionId, parentElement) {

@@ -1,4 +1,6 @@
 // Global variables for state management
+import { buildFullFunctionCodeView, fallbackToFunctionOnlyView } from './code-viewer.js';
+
 let currentFunctionId = null;
 let repoHash = null;
 let pinnedFunctions = [];
@@ -1344,11 +1346,11 @@ async function loadFunctionDetails(repoHash, functionId) {
 
     const parentNode = document.querySelector(`.node[data-id="${functionId}"]`);
 
-    if (parentNode && parentNode.dataset.type === 'function') {
-      document
-        .querySelector('.function-highlight')
-        .scrollIntoView({ behavior: 'smooth' });
-    }
+    // if (parentNode && parentNode.dataset.type === 'function') {
+    //   document
+    //     .querySelector('.function-highlight')
+    //     .scrollIntoView({ behavior: 'smooth' });
+    // }
   } catch (error) {
     console.error('Error loading function details:', error);
     const panelContent = document.querySelector('.panel-content');
@@ -1642,426 +1644,426 @@ async function displaySegmentDetails(segment, targetFunctionId) {
 
 // Helper function to build a complete function code view with highlighting
 // Helper function to build a complete function code view with highlighting
-async function buildFullFunctionCodeView(
-  functionData,
-  highlightComponent = null,
-  highlightSegment = null
-) {
-  // If functionData is null but we have a current function ID, fetch the function data
-  if (!functionData && currentFunctionId) {
-    try {
-      const repoHash = document.querySelector('.repo-info').dataset.repoHash;
-      const response = await fetch(
-        `/code/api/functions/${repoHash}/${currentFunctionId}`
-      );
-      functionData = await response.json();
-    } catch (error) {
-      console.error('Error fetching current function data:', error);
-      return '<p>Error loading function code.</p>';
-    }
-  }
+// async function buildFullFunctionCodeView(
+//   functionData,
+//   highlightComponent = null,
+//   highlightSegment = null
+// ) {
+//   // If functionData is null but we have a current function ID, fetch the function data
+//   if (!functionData && currentFunctionId) {
+//     try {
+//       const repoHash = document.querySelector('.repo-info').dataset.repoHash;
+//       const response = await fetch(
+//         `/code/api/functions/${repoHash}/${currentFunctionId}`
+//       );
+//       functionData = await response.json();
+//     } catch (error) {
+//       console.error('Error fetching current function data:', error);
+//       return '<p>Error loading function code.</p>';
+//     }
+//   }
 
-  // If we still don't have function data, return an error message
-  if (!functionData) {
-    return '<p>No function data available.</p>';
-  }
+//   // If we still don't have function data, return an error message
+//   if (!functionData) {
+//     return '<p>No function data available.</p>';
+//   }
 
-  try {
-    // Use the file_path to get the complete file content
-    const filePath = functionData.file_path;
-    const functionStart = functionData.lineno;
-    const functionEnd = functionData.end_lineno;
+//   try {
+//     // Use the file_path to get the complete file content
+//     const filePath = functionData.file_path;
+//     const functionStart = functionData.lineno;
+//     const functionEnd = functionData.end_lineno;
 
-    // Fetch the file content using an API endpoint
-    let fileLines = [];
+//     // Fetch the file content using an API endpoint
+//     let fileLines = [];
 
-    try {
-      const repoHash = document.querySelector('.repo-info').dataset.repoHash;
-      const response = await fetch(
-        `/code/api/file?path=${encodeURIComponent(
-          filePath
-        )}&repo_hash=${repoHash}`
-      );
+//     try {
+//       const repoHash = document.querySelector('.repo-info').dataset.repoHash;
+//       const response = await fetch(
+//         `/code/api/file?path=${encodeURIComponent(
+//           filePath
+//         )}&repo_hash=${repoHash}`
+//       );
 
-      if (response.ok) {
-        const fileContent = await response.text();
-        fileLines = fileContent.split('\n');
-      } else {
-        console.warn(
-          'Error fetching complete file, falling back to function-only view'
-        );
-        // Fall back to function-only view using segments
-        return fallbackToFunctionOnlyView(
-          functionData,
-          highlightComponent,
-          highlightSegment
-        );
-      }
-    } catch (fileError) {
-      console.warn(
-        'Error reading file directly, falling back to function-only view:',
-        fileError
-      );
-      return fallbackToFunctionOnlyView(
-        functionData,
-        highlightComponent,
-        highlightSegment
-      );
-    }
+//       if (response.ok) {
+//         const fileContent = await response.text();
+//         fileLines = fileContent.split('\n');
+//       } else {
+//         console.warn(
+//           'Error fetching complete file, falling back to function-only view'
+//         );
+//         // Fall back to function-only view using segments
+//         return fallbackToFunctionOnlyView(
+//           functionData,
+//           highlightComponent,
+//           highlightSegment
+//         );
+//       }
+//     } catch (fileError) {
+//       console.warn(
+//         'Error reading file directly, falling back to function-only view:',
+//         fileError
+//       );
+//       return fallbackToFunctionOnlyView(
+//         functionData,
+//         highlightComponent,
+//         highlightSegment
+//       );
+//     }
 
-    // Get components for the function
-    let components = [];
-    try {
-      const repoHash = document.querySelector('.repo-info').dataset.repoHash;
-      const compResponse = await fetch(
-        `/code/api/functions/${repoHash}/${functionData.id}/components`
-      );
-      if (compResponse.ok) {
-        components = await compResponse.json();
-      }
-    } catch (error) {
-      console.warn('Error fetching components:', error);
-    }
+//     // Get components for the function
+//     let components = [];
+//     try {
+//       const repoHash = document.querySelector('.repo-info').dataset.repoHash;
+//       const compResponse = await fetch(
+//         `/code/api/functions/${repoHash}/${functionData.id}/components`
+//       );
+//       if (compResponse.ok) {
+//         components = await compResponse.json();
+//       }
+//     } catch (error) {
+//       console.warn('Error fetching components:', error);
+//     }
 
-    // Sort components by start line
-    components.sort((a, b) => a.start_lineno - b.start_lineno);
+//     // Sort components by start line
+//     components.sort((a, b) => a.start_lineno - b.start_lineno);
 
-    // Use different background colors for different elements
-    const componentColors = [
-      'rgba(255, 217, 0, 0.4)', // Light blue (very faint)
-      'rgba(242, 255, 0, 0.25)', // Light green (very faint)
-    ];
+//     // Use different background colors for different elements
+//     const componentColors = [
+//       'rgba(255, 217, 0, 0.4)', // Light blue (very faint)
+//       'rgba(242, 255, 0, 0.25)', // Light green (very faint)
+//     ];
 
-    const segmentColors = {
-      code: 'rgba(255, 253, 231, 0.2)', // Light yellow (faint)
-      call: 'rgba(255, 232, 230, 0.2)', // Light red (faint)
-      comment: 'rgba(245, 245, 245, 0.2)', // Light gray (faint)
-    };
+//     const segmentColors = {
+//       code: 'rgba(255, 253, 231, 0.2)', // Light yellow (faint)
+//       call: 'rgba(255, 232, 230, 0.2)', // Light red (faint)
+//       comment: 'rgba(245, 245, 245, 0.2)', // Light gray (faint)
+//     };
 
-    const highlightedComponentColor = 'rgba(187, 222, 251, 0.7)'; // Blue (stronger)
+//     const highlightedComponentColor = 'rgba(187, 222, 251, 0.7)'; // Blue (stronger)
 
-    const highlightedSegmentColors = {
-      code: 'rgba(255, 253, 231, 0.7)', // Yellow (stronger)
-      call: 'rgba(255, 232, 230, 0.7)', // Red (stronger)
-      comment: 'rgba(245, 245, 245, 0.7)', // Gray (stronger)
-    };
+//     const highlightedSegmentColors = {
+//       code: 'rgba(255, 253, 231, 0.7)', // Yellow (stronger)
+//       call: 'rgba(255, 232, 230, 0.7)', // Red (stronger)
+//       comment: 'rgba(245, 245, 245, 0.7)', // Gray (stronger)
+//     };
 
-    // Function to determine if a line belongs to a component
-    function lineInComponent(absLine, component) {
-      return (
-        absLine >= component.start_lineno && absLine <= component.end_lineno
-      );
-    }
+//     // Function to determine if a line belongs to a component
+//     function lineInComponent(absLine, component) {
+//       return (
+//         absLine >= component.start_lineno && absLine <= component.end_lineno
+//       );
+//     }
 
-    // Function to determine if a line belongs to a segment
-    function lineInSegment(relLine, segment) {
-      const segmentRelLine = segment.lineno;
-      const segmentRelEnd = segment.end_lineno || segment.lineno;
-      return relLine >= segmentRelLine && relLine <= segmentRelEnd;
-    }
+//     // Function to determine if a line belongs to a segment
+//     function lineInSegment(relLine, segment) {
+//       const segmentRelLine = segment.lineno;
+//       const segmentRelEnd = segment.end_lineno || segment.lineno;
+//       return relLine >= segmentRelLine && relLine <= segmentRelEnd;
+//     }
 
-    // Function to get the component index for coloring
-    function getComponentIndex(component, components) {
-      const index = components.findIndex((c) => c.id === component.id);
-      return index >= 0 ? index % componentColors.length : -1;
-    }
+//     // Function to get the component index for coloring
+//     function getComponentIndex(component, components) {
+//       const index = components.findIndex((c) => c.id === component.id);
+//       return index >= 0 ? index % componentColors.length : -1;
+//     }
 
-    // Build code lines with appropriate highlighting
-    let codeLines = [];
+//     // Build code lines with appropriate highlighting
+//     let codeLines = [];
 
-    for (let i = 0; i < fileLines.length; i++) {
-      const lineNumber = i + 1; // 1-based line number
-      const lineContent = fileLines[i] || '';
+//     for (let i = 0; i < fileLines.length; i++) {
+//       const lineNumber = i + 1; // 1-based line number
+//       const lineContent = fileLines[i] || '';
 
-      // Determine if this line is part of the selected function
-      const isInFunction =
-        lineNumber >= functionStart && lineNumber <= functionEnd;
+//       // Determine if this line is part of the selected function
+//       const isInFunction =
+//         lineNumber >= functionStart && lineNumber <= functionEnd;
 
-      // If we're inside the function, apply specific highlighting
-      let backgroundColor = isInFunction
-        ? 'rgba(187, 222, 251, 0.15)'
-        : 'transparent';
-      let borderLeft = isInFunction ? '1px solid #bbdefb' : '';
-      let strongHighlight = false;
+//       // If we're inside the function, apply specific highlighting
+//       let backgroundColor = isInFunction
+//         ? 'rgba(187, 222, 251, 0.15)'
+//         : 'transparent';
+//       let borderLeft = isInFunction ? '1px solid #bbdefb' : '';
+//       let strongHighlight = false;
 
-      if (isInFunction) {
-        const relLine = lineNumber - functionStart + 1; // Relative line within the function
+//       if (isInFunction) {
+//         const relLine = lineNumber - functionStart + 1; // Relative line within the function
 
-        // Find the component that contains this line
-        const containingComponent = components.find((comp) =>
-          lineInComponent(lineNumber, comp)
-        );
+//         // Find the component that contains this line
+//         const containingComponent = components.find((comp) =>
+//           lineInComponent(lineNumber, comp)
+//         );
 
-        // Find the segment that contains this line
-        const segment = functionData.segments.find((seg) =>
-          lineInSegment(relLine, seg)
-        );
+//         // Find the segment that contains this line
+//         const segment = functionData.segments.find((seg) =>
+//           lineInSegment(relLine, seg)
+//         );
 
-        // Base component highlighting (always show component regions with faint colors)
-        if (containingComponent) {
-          const colorIndex = getComponentIndex(containingComponent, components);
-          backgroundColor = componentColors[colorIndex >= 0 ? colorIndex : 0];
-        }
+//         // Base component highlighting (always show component regions with faint colors)
+//         if (containingComponent) {
+//           const colorIndex = getComponentIndex(containingComponent, components);
+//           backgroundColor = componentColors[colorIndex >= 0 ? colorIndex : 0];
+//         }
 
-        // Enhanced component highlighting when a specific component is selected
-        if (
-          highlightComponent &&
-          containingComponent &&
-          highlightComponent.id === containingComponent.id
-        ) {
-          backgroundColor = highlightedComponentColor;
-          borderLeft = '3px solid #1976d2';
-          strongHighlight = true;
-        }
+//         // Enhanced component highlighting when a specific component is selected
+//         if (
+//           highlightComponent &&
+//           containingComponent &&
+//           highlightComponent.id === containingComponent.id
+//         ) {
+//           backgroundColor = highlightedComponentColor;
+//           borderLeft = '3px solid #1976d2';
+//           strongHighlight = true;
+//         }
 
-        // Segment highlighting (overrides component highlighting)
-        if (segment) {
-          // Apply stronger highlight if this segment is specifically selected
-          if (highlightSegment && segment.id === highlightSegment.id) {
-            backgroundColor = highlightedSegmentColors[segment.type];
-            borderLeft = '3px solid #f57c00';
-            strongHighlight = true;
-          }
-          // Otherwise, if we're viewing a call segment and not on a component view,
-          // just add a light highlight to all segments
-          else if (!highlightComponent) {
-            // Mix the segment color with existing background
-            const segmentColor = segmentColors[segment.type];
-            if (
-              backgroundColor === 'transparent' ||
-              backgroundColor === 'rgba(187, 222, 251, 0.15)'
-            ) {
-              backgroundColor = segmentColor;
-            }
-            // Otherwise, the component background will remain
-          }
-        }
-      }
+//         // Segment highlighting (overrides component highlighting)
+//         if (segment) {
+//           // Apply stronger highlight if this segment is specifically selected
+//           if (highlightSegment && segment.id === highlightSegment.id) {
+//             backgroundColor = highlightedSegmentColors[segment.type];
+//             borderLeft = '3px solid #f57c00';
+//             strongHighlight = true;
+//           }
+//           // Otherwise, if we're viewing a call segment and not on a component view,
+//           // just add a light highlight to all segments
+//           else if (!highlightComponent) {
+//             // Mix the segment color with existing background
+//             const segmentColor = segmentColors[segment.type];
+//             if (
+//               backgroundColor === 'transparent' ||
+//               backgroundColor === 'rgba(187, 222, 251, 0.15)'
+//             ) {
+//               backgroundColor = segmentColor;
+//             }
+//             // Otherwise, the component background will remain
+//           }
+//         }
+//       }
 
-      // Generate the HTML for this line
-      codeLines.push(`
-                <div class="code-line ${
-                  isInFunction ? 'function-highlight' : ''
-                } ${strongHighlight ? 'strong-highlight' : ''}" 
-                     style="background-color: ${backgroundColor}; ${
-        borderLeft ? 'border-left: ' + borderLeft + ';' : ''
-      }">
-                    <span class="line-number">${lineNumber}</span>
-                    <span class="line-content"><code class="language-python">${escapeHTML(
-                      lineContent
-                    )}</code></span>
-                </div>
-            `);
-    }
+//       // Generate the HTML for this line
+//       codeLines.push(`
+//                 <div class="code-line ${
+//                   isInFunction ? 'function-highlight' : ''
+//                 } ${strongHighlight ? 'strong-highlight' : ''}" 
+//                      style="background-color: ${backgroundColor}; ${
+//         borderLeft ? 'border-left: ' + borderLeft + ';' : ''
+//       }">
+//                     <span class="line-number">${lineNumber}</span>
+//                     <span class="line-content"><code class="language-python">${escapeHTML(
+//                       lineContent
+//                     )}</code></span>
+//                 </div>
+//             `);
+//     }
 
-    // Add a scroll indicator to jump to the function
-    const scrollToFunction = `
-            <div class="scroll-indicator">
-                <button onclick="document.querySelector('.function-highlight').scrollIntoView({behavior: 'smooth'})">
-                    Scroll to Function (Line ${functionStart})
-                </button>
-            </div>
-        `;
+//     // Add a scroll indicator to jump to the function
+//     const scrollToFunction = `
+//             <div class="scroll-indicator">
+//                 <button onclick="document.querySelector('.function-highlight').scrollIntoView({behavior: 'smooth'})">
+//                     Scroll to Function (Line ${functionStart})
+//                 </button>
+//             </div>
+//         `;
 
-    setTimeout(() => {
-      Prism.highlightAll();
-    }, 100);
+//     setTimeout(() => {
+//       Prism.highlightAll();
+//     }, 100);
 
-    // Return the complete code view
-    return `
-            ${scrollToFunction}
-            <div class="function-code-view">
-                <div class="code-container">
-                    ${codeLines.join('')}
-                </div>
-            </div>
-        `;
-  } catch (error) {
-    console.error('Error building function code view:', error);
-    return `<p>Error displaying function code: ${error.message}</p>`;
-  }
-}
+//     // Return the complete code view
+//     return `
+//             ${scrollToFunction}
+//             <div class="function-code-view">
+//                 <div class="code-container">
+//                     ${codeLines.join('')}
+//                 </div>
+//             </div>
+//         `;
+//   } catch (error) {
+//     console.error('Error building function code view:', error);
+//     return `<p>Error displaying function code: ${error.message}</p>`;
+//   }
+// }
 
-// Fallback function for when we can't get the complete file
-function fallbackToFunctionOnlyView(
-  functionData,
-  highlightComponent,
-  highlightSegment
-) {
-  try {
-    // Sort segments by line number to ensure correct order
-    const sortedSegments = [...functionData.segments].sort(
-      (a, b) => a.lineno - b.lineno
-    );
+// // Fallback function for when we can't get the complete file
+// function fallbackToFunctionOnlyView(
+//   functionData,
+//   highlightComponent,
+//   highlightSegment
+// ) {
+//   try {
+//     // Sort segments by line number to ensure correct order
+//     const sortedSegments = [...functionData.segments].sort(
+//       (a, b) => a.lineno - b.lineno
+//     );
 
-    // Create an array to hold all lines of the function
-    const totalLines = functionData.end_lineno - functionData.lineno + 1;
-    const fileLines = Array(totalLines).fill('');
+//     // Create an array to hold all lines of the function
+//     const totalLines = functionData.end_lineno - functionData.lineno + 1;
+//     const fileLines = Array(totalLines).fill('');
 
-    // Fill in content from segments
-    for (const segment of sortedSegments) {
-      const segmentContent = segment.content.split('\n');
-      const relStartLine = segment.lineno;
+//     // Fill in content from segments
+//     for (const segment of sortedSegments) {
+//       const segmentContent = segment.content.split('\n');
+//       const relStartLine = segment.lineno;
 
-      for (let i = 0; i < segmentContent.length; i++) {
-        const fileLineIndex = relStartLine - 1 + i;
-        if (fileLineIndex >= 0 && fileLineIndex < totalLines) {
-          fileLines[fileLineIndex] = segmentContent[i];
-        }
-      }
-    }
+//       for (let i = 0; i < segmentContent.length; i++) {
+//         const fileLineIndex = relStartLine - 1 + i;
+//         if (fileLineIndex >= 0 && fileLineIndex < totalLines) {
+//           fileLines[fileLineIndex] = segmentContent[i];
+//         }
+//       }
+//     }
 
-    // Get components for the function
-    let components = [];
-    try {
-      const repoHash = document.querySelector('.repo-info').dataset.repoHash;
-      const compResponse = fetch(
-        `/code/api/functions/${repoHash}/${functionData.id}/components`
-      );
-      components = compResponse.json();
-    } catch (error) {
-      console.warn('Error fetching components:', error);
-    }
+//     // Get components for the function
+//     let components = [];
+//     try {
+//       const repoHash = document.querySelector('.repo-info').dataset.repoHash;
+//       const compResponse = fetch(
+//         `/code/api/functions/${repoHash}/${functionData.id}/components`
+//       );
+//       components = compResponse.json();
+//     } catch (error) {
+//       console.warn('Error fetching components:', error);
+//     }
 
-    // Sort components by start line
-    components.sort((a, b) => a.start_lineno - b.start_lineno);
+//     // Sort components by start line
+//     components.sort((a, b) => a.start_lineno - b.start_lineno);
 
-    // Define highlight colors (same as in the main function)
-    const componentColors = [
-      'rgba(187, 222, 251, 0.15)', // Light blue (very faint)
-      'rgba(200, 230, 201, 0.15)', // Light green (very faint)
-      'rgba(255, 236, 179, 0.15)', // Light amber (very faint)
-    ];
+//     // Define highlight colors (same as in the main function)
+//     const componentColors = [
+//       'rgba(187, 222, 251, 0.15)', // Light blue (very faint)
+//       'rgba(200, 230, 201, 0.15)', // Light green (very faint)
+//       'rgba(255, 236, 179, 0.15)', // Light amber (very faint)
+//     ];
 
-    const segmentColors = {
-      code: 'rgba(255, 253, 231, 0.2)', // Light yellow (faint)
-      call: 'rgba(255, 232, 230, 0.2)', // Light red (faint)
-      comment: 'rgba(245, 245, 245, 0.2)', // Light gray (faint)
-    };
+//     const segmentColors = {
+//       code: 'rgba(255, 253, 231, 0.2)', // Light yellow (faint)
+//       call: 'rgba(255, 232, 230, 0.2)', // Light red (faint)
+//       comment: 'rgba(245, 245, 245, 0.2)', // Light gray (faint)
+//     };
 
-    const highlightedComponentColor = 'rgba(187, 222, 251, 0.5)'; // Blue (stronger)
+//     const highlightedComponentColor = 'rgba(187, 222, 251, 0.5)'; // Blue (stronger)
 
-    const highlightedSegmentColors = {
-      code: 'rgba(255, 253, 231, 0.7)', // Yellow (stronger)
-      call: 'rgba(255, 232, 230, 0.7)', // Red (stronger)
-      comment: 'rgba(245, 245, 245, 0.7)', // Gray (stronger)
-    };
+//     const highlightedSegmentColors = {
+//       code: 'rgba(255, 253, 231, 0.7)', // Yellow (stronger)
+//       call: 'rgba(255, 232, 230, 0.7)', // Red (stronger)
+//       comment: 'rgba(245, 245, 245, 0.7)', // Gray (stronger)
+//     };
 
-    // Function to determine if a line belongs to a component
-    function lineInComponent(absLine, component) {
-      return (
-        absLine >= component.start_lineno && absLine <= component.end_lineno
-      );
-    }
+//     // Function to determine if a line belongs to a component
+//     function lineInComponent(absLine, component) {
+//       return (
+//         absLine >= component.start_lineno && absLine <= component.end_lineno
+//       );
+//     }
 
-    // Function to determine if a line belongs to a segment
-    function lineInSegment(relLine, segment) {
-      return (
-        relLine >= segment.lineno &&
-        (segment.end_lineno
-          ? relLine <= segment.end_lineno
-          : relLine === segment.lineno)
-      );
-    }
+//     // Function to determine if a line belongs to a segment
+//     function lineInSegment(relLine, segment) {
+//       return (
+//         relLine >= segment.lineno &&
+//         (segment.end_lineno
+//           ? relLine <= segment.end_lineno
+//           : relLine === segment.lineno)
+//       );
+//     }
 
-    // Function to get the component index for coloring
-    function getComponentIndex(component, components) {
-      const index = components.findIndex((c) => c.id === component.id);
-      return index >= 0 ? index % componentColors.length : -1;
-    }
+//     // Function to get the component index for coloring
+//     function getComponentIndex(component, components) {
+//       const index = components.findIndex((c) => c.id === component.id);
+//       return index >= 0 ? index % componentColors.length : -1;
+//     }
 
-    // Build code lines with appropriate highlighting
-    let codeLines = [];
+//     // Build code lines with appropriate highlighting
+//     let codeLines = [];
 
-    for (let i = 0; i < fileLines.length; i++) {
-      const relLine = i + 1; // Relative line number (1-based)
-      const absLine = functionData.lineno + i; // Absolute line number
-      const lineContent = fileLines[i] || '';
+//     for (let i = 0; i < fileLines.length; i++) {
+//       const relLine = i + 1; // Relative line number (1-based)
+//       const absLine = functionData.lineno + i; // Absolute line number
+//       const lineContent = fileLines[i] || '';
 
-      // Find the component that contains this line
-      const containingComponent = components.find((comp) =>
-        lineInComponent(absLine, comp)
-      );
+//       // Find the component that contains this line
+//       const containingComponent = components.find((comp) =>
+//         lineInComponent(absLine, comp)
+//       );
 
-      // Find the segment that contains this line
-      const segment = functionData.segments.find((seg) =>
-        lineInSegment(relLine, seg)
-      );
+//       // Find the segment that contains this line
+//       const segment = functionData.segments.find((seg) =>
+//         lineInSegment(relLine, seg)
+//       );
 
-      // Determine the background color and highlighting
-      let backgroundColor = 'transparent';
-      let borderLeft = '';
-      let strongHighlight = false;
+//       // Determine the background color and highlighting
+//       let backgroundColor = 'transparent';
+//       let borderLeft = '';
+//       let strongHighlight = false;
 
-      // Base component highlighting (always show component regions with faint colors)
-      if (containingComponent) {
-        const colorIndex = getComponentIndex(containingComponent, components);
-        backgroundColor = componentColors[colorIndex >= 0 ? colorIndex : 0];
-      }
+//       // Base component highlighting (always show component regions with faint colors)
+//       if (containingComponent) {
+//         const colorIndex = getComponentIndex(containingComponent, components);
+//         backgroundColor = componentColors[colorIndex >= 0 ? colorIndex : 0];
+//       }
 
-      // Enhanced component highlighting when a specific component is selected
-      if (
-        highlightComponent &&
-        containingComponent &&
-        highlightComponent.id === containingComponent.id
-      ) {
-        backgroundColor = highlightedComponentColor;
-        borderLeft = '3px solid #1976d2';
-        strongHighlight = true;
-      }
+//       // Enhanced component highlighting when a specific component is selected
+//       if (
+//         highlightComponent &&
+//         containingComponent &&
+//         highlightComponent.id === containingComponent.id
+//       ) {
+//         backgroundColor = highlightedComponentColor;
+//         borderLeft = '3px solid #1976d2';
+//         strongHighlight = true;
+//       }
 
-      // Segment highlighting (overrides component highlighting)
-      if (segment) {
-        // Apply stronger highlight if this segment is specifically selected
-        if (highlightSegment && segment.id === highlightSegment.id) {
-          backgroundColor = highlightedSegmentColors[segment.type];
-          borderLeft = '3px solid #f57c00';
-          strongHighlight = true;
-        }
-        // Otherwise, if we're viewing a call segment and not on a component view,
-        // just add a light highlight to all segments
-        else if (!highlightComponent) {
-          // Mix the segment color with existing background
-          const segmentColor = segmentColors[segment.type];
-          if (backgroundColor === 'transparent') {
-            backgroundColor = segmentColor;
-          }
-          // Otherwise, the component background will remain
-        }
-      }
+//       // Segment highlighting (overrides component highlighting)
+//       if (segment) {
+//         // Apply stronger highlight if this segment is specifically selected
+//         if (highlightSegment && segment.id === highlightSegment.id) {
+//           backgroundColor = highlightedSegmentColors[segment.type];
+//           borderLeft = '3px solid #f57c00';
+//           strongHighlight = true;
+//         }
+//         // Otherwise, if we're viewing a call segment and not on a component view,
+//         // just add a light highlight to all segments
+//         else if (!highlightComponent) {
+//           // Mix the segment color with existing background
+//           const segmentColor = segmentColors[segment.type];
+//           if (backgroundColor === 'transparent') {
+//             backgroundColor = segmentColor;
+//           }
+//           // Otherwise, the component background will remain
+//         }
+//       }
 
-      // Generate the HTML for this line
-      codeLines.push(`
-                <div class="code-line ${
-                  strongHighlight ? 'strong-highlight' : ''
-                }" 
-                     style="background-color: ${backgroundColor}; ${
-        borderLeft ? 'border-left: ' + borderLeft + ';' : ''
-      }">
-                    <span class="line-number">${relLine}</span>
-                    span class="line-content"><code class="language-python">${escapeHTML(
-                      lineContent
-                    )}</code></span>
-                </div>
-            `);
-    }
+//       // Generate the HTML for this line
+//       codeLines.push(`
+//                 <div class="code-line ${
+//                   strongHighlight ? 'strong-highlight' : ''
+//                 }" 
+//                      style="background-color: ${backgroundColor}; ${
+//         borderLeft ? 'border-left: ' + borderLeft + ';' : ''
+//       }">
+//                     <span class="line-number">${relLine}</span>
+//                     span class="line-content"><code class="language-python">${escapeHTML(
+//                       lineContent
+//                     )}</code></span>
+//                 </div>
+//             `);
+//     }
 
-    // Return the function-only code view
-    return `
-            <div class="function-code-view">
-                <div class="file-view-note">
-                    <p>Note: Showing only the function code. Unable to load the complete file.</p>
-                </div>
-                <div class="code-container">
-                    ${codeLines.join('')}
-                </div>
-            </div>
-        `;
-  } catch (error) {
-    console.error('Error building fallback function view:', error);
-    return `<p>Error displaying function code: ${error.message}</p>`;
-  }
-}
+//     // Return the function-only code view
+//     return `
+//             <div class="function-code-view">
+//                 <div class="file-view-note">
+//                     <p>Note: Showing only the function code. Unable to load the complete file.</p>
+//                 </div>
+//                 <div class="code-container">
+//                     ${codeLines.join('')}
+//                 </div>
+//             </div>
+//         `;
+//   } catch (error) {
+//     console.error('Error building fallback function view:', error);
+//     return `<p>Error displaying function code: ${error.message}</p>`;
+//   }
+// }
 
 function applyPrismHighlighting() {
   // Force Prism to re-highlight all code elements

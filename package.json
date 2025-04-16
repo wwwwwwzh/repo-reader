@@ -1,0 +1,17 @@
+{
+  "dependencies": {
+    "@codemirror/basic-setup": "^0.20.0",
+    "@codemirror/commands": "^6.8.1",
+    "@codemirror/lang-python": "^6.1.7",
+    "@codemirror/language": "^6.11.0",
+    "@codemirror/state": "^6.5.2",
+    "@codemirror/theme-one-dark": "^6.1.2",
+    "@codemirror/view": "^6.36.5"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.2"
+  },
+  "scripts": {
+    "build": "esbuild app/static/js/main.js --bundle --format=esm --minify --sourcemap --outfile=app/static/js/bundle.js"
+  }
+}

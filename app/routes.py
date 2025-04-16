@@ -48,9 +48,9 @@ def show_tree(repo_hash):
     
     return render_template('tree.html', repo_hash=repo_hash, repo_name=repo_name, repo_url=repo.url)
 
-@bp.route('/static/js/tree.js')
-def serve_tree_js():
-    return send_from_directory(os.path.join(current_app.root_path, 'static/js'), 'tree.js')
+@bp.route('/static/js/<path:filename>')
+def serve_tree_js(filename):
+    return send_from_directory(os.path.join(current_app.root_path, 'static/js'), filename)
 
 @bp.route('/static/css/<path:filename>')
 def css_files(filename):

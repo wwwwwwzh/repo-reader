@@ -1,0 +1,160 @@
+/* CodeMirror Editor Styles */
+
+.code-editor-container {
+    height: calc(100vh - 250px);
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    overflow: hidden;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 14px;
+  }
+  
+  /* Make sure the CodeMirror editor fills its container */
+  .cm-editor {
+    height: 100%;
+  }
+  
+  /* Styling for code content */
+  .cm-content {
+    font-family: 'Consolas', 'Monaco', monospace;
+    line-height: 1.5;
+  }
+  
+  /* Line number gutter styling */
+  .cm-gutters {
+    background-color: #f8f9fa;
+    border-right: 1px solid #ddd;
+    min-width: 40px;
+  }
+  
+  /* Function highlight styling */
+  .cm-function-highlight {
+    background-color: rgba(187, 222, 251, 0.15);
+    border-left: 1px solid #bbdefb;
+  }
+  
+  /* Component highlight styling */
+  .cm-component-highlight {
+    background-color: rgba(187, 222, 251, 0.5);
+    border-left: 3px solid #1976d2;
+  }
+  
+  /* Segment highlight styling */
+  .cm-segment-code-highlight {
+    background-color: rgba(255, 253, 231, 0.7);
+    border-left: 3px solid #f57c00;
+  }
+  
+  .cm-segment-call-highlight {
+    background-color: rgba(255, 232, 230, 0.7);
+    border-left: 3px solid #f57c00;
+  }
+  
+  .cm-segment-comment-highlight {
+    background-color: rgba(245, 245, 245, 0.7);
+    border-left: 3px solid #f57c00;
+  }
+  
+  /* Styling for active line */
+  .cm-activeLine {
+    background-color: rgba(232, 242, 254, 0.3);
+  }
+  
+  /* Styling for the fold markers */
+  .cm-foldGutter span {
+    cursor: pointer;
+    color: #6a6a6a;
+    font-size: 10px;
+    transition: color 0.2s;
+  }
+  
+  .cm-foldGutter span:hover {
+    color: #1976d2;
+  }
+  
+  /* Style for the scroll indicator button */
+  .scroll-indicator {
+    position: sticky;
+    top: 0;
+    background-color: white;
+    padding: 5px 0;
+    z-index: 100;
+    border-bottom: 1px solid #ddd;
+    margin-bottom: 10px;
+  }
+  
+  .scroll-indicator button {
+    background-color: #1976d2;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+  }
+  
+  .scroll-indicator button:hover {
+    background-color: #1565c0;
+  }
+  
+  /* File view note styling */
+  .file-view-note {
+    background-color: #fff3cd;
+    padding: 10px;
+    border-left: 4px solid #ffc107;
+    margin-bottom: 10px;
+  }
+  
+  /* Make sure the editor gets focus styling */
+  .cm-focused {
+    outline: none !important;
+  }
+  
+  /* Styling for the cursor */
+  .cm-cursor {
+    border-left: 2px solid #1976d2 !important;
+  }
+  
+  /* Selection styling */
+  .cm-selectionBackground {
+    background-color: rgba(25, 118, 210, 0.2) !important;
+  }
+  
+  /* Make Python keywords stand out */
+  .cm-keyword {
+    color: #d32f2f;
+    font-weight: bold;
+  }
+  
+  /* Class and function names */
+  .cm-def {
+    color: #1976d2;
+    font-weight: bold;
+  }
+  
+  /* String literals */
+  .cm-string {
+    color: #388e3c;
+  }
+  
+  /* Comments */
+  .cm-comment {
+    color: #757575;
+    font-style: italic;
+  }
+  
+  /* Numbers */
+  .cm-number {
+    color: #ff8f00;
+  }
+  
+  /* Fix any mobile issues */
+  @media (max-width: 768px) {
+    .code-editor-container {
+      height: 50vh;
+    }
+    
+    .cm-gutters {
+      min-width: 32px;
+    }
+  }

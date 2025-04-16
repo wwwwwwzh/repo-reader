@@ -9,3 +9,4 @@ __pycache__/
 scratch.*
 repos/
 cache/
+node_modules/

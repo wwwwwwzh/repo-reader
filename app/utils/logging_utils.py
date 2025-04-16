@@ -1,12 +1,16 @@
 import logging, os
+from dotenv import load_dotenv
+
+load_dotenv()
+
 
 def setup_custom_logger(
-    name: str,
-    file_path: str = os.environ.get(""),
+    name: str = "main",
+    file_path: str = os.environ.get("LOG_DIR"),
     file_level: int = logging.DEBUG,
     console_level: int = logging.INFO,
-    file_format: str = '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    console_format: str = '%(levelname)s - %(message)s'
+    file_format: str = '%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s - %(message)s',
+    console_format: str = '%(filename)s:%(lineno)d - %(levelname)s - %(message)s'
 ) -> logging.Logger:
     """
     Set up a custom logger with separate file and console handlers, each with its own level and formatter.
@@ -29,7 +33,7 @@ def setup_custom_logger(
 
     # Create and set formatter for the file handler
     file_formatter = logging.Formatter(file_format)
-    file_handler = logging.FileHandler(file_path, mode='a')
+    file_handler = logging.FileHandler(os.path.join(file_path, name), mode='a')
     file_handler.setLevel(file_level)
     file_handler.setFormatter(file_formatter)
     logger.addHandler(file_handler)
@@ -43,21 +47,4 @@ def setup_custom_logger(
 
     return logger
 
-
-# Example usage:
-if __name__ == "__main__":
-    # Configure the logger with different formats and levels:
-    logger = setup_custom_logger(
-        name="my_custom_logger",
-        file_path="custom_app.log",
-        file_level=logging.DEBUG,
-        console_level=logging.WARNING,
-        file_format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        console_format='%(levelname)s: %(message)s'
-    )
-
-    logger.debug("This is a debug message (file only).")
-    logger.info("This is an info message (file only).")
-    logger.warning("This is a warning message (both file and console).")
-    logger.error("This is an error message (both file and console).")
-    logger.critical("This is a critical message (both file and console).")
+logger = setup_custom_logger("main")

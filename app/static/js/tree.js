@@ -54,7 +54,27 @@ function setupFunctionSearch() {
   const searchInput = document.getElementById('function-search');
   const searchButton = document.getElementById('search-button');
   const searchResults = document.getElementById('search-results');
+  const searchContainer = document.querySelector('.search-container');
 
+  // LLM API KEY SETTING
+  const apiKeyLink = document.createElement('a');
+  apiKeyLink.href = '#';
+  apiKeyLink.textContent = 'Set Groq API Key';
+  apiKeyLink.style.fontSize = '0.8em';
+  apiKeyLink.style.marginTop = '5px';
+  apiKeyLink.style.display = 'block';
+  apiKeyLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      const currentKey = localStorage.getItem('groqApiKey') || '';
+      const newKey = prompt('Enter your Groq API key for better search results:', currentKey);
+      if (newKey !== null) {
+          localStorage.setItem('groqApiKey', newKey);
+          alert('API key saved! ' + (newKey ? 'Semantic search is now enabled.' : 'Semantic search is now disabled.'));
+      }
+  });
+  searchContainer.appendChild(apiKeyLink);
+
+  // SEARCH 
   // Function to perform the search
   async function performSearch() {
     const searchTerm = searchInput.value.trim();
@@ -117,14 +137,12 @@ function setupFunctionSearch() {
 
   // Click search button
   searchButton.addEventListener('click', performSearch);
-
   // Also search on Enter key press
   searchInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') {
       performSearch();
     }
   });
-
   // Hide search results when clicking outside
   document.addEventListener('click', (e) => {
     if (
@@ -136,6 +154,7 @@ function setupFunctionSearch() {
     }
   });
 
+  // MANAGE SEARCH HISTORY
   const historyKey = `searchHistory_${repoHash}`;
   let searchHistory = JSON.parse(localStorage.getItem(historyKey) || '[]');
 
@@ -218,7 +237,6 @@ function setupFunctionSearch() {
   }
 
   // Add history container to search container
-  const searchContainer = document.querySelector('.search-container');
   searchContainer.appendChild(historyContainer);
 
   // Initialize history display

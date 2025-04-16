@@ -4,13 +4,9 @@ import os
 from pathlib import Path
 from collections import defaultdict
 import re, textwrap, tokenize
-import logging
 from app.utils.llm_function_analyzer import set_api_key, analyze_function
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(filename)s:%(lineno)d - %(levelname)s - %(message)s'
-)
+from app.utils.logging_utils import logger
 
 
 class FunctionRegistry:
@@ -306,10 +302,10 @@ class CallAnalyzer(std_ast.NodeVisitor):
         2. Match by simple name when imported
         3. Match by suffix (e.g., 'helpers.validate_input' matches 'utils.helpers.validate_input')
         """
-        # logging.info(f"{call_name=}, {self.import_tracker.imported_modules=}")
+        # logger.info(f"{call_name=}, {self.import_tracker.imported_modules=}")
         # Case 1: Direct match by full name
         func_id, func_info = self.registry.get_function_by_name(call_name)
-        # logging.info(f"{func_id=}, {func_info=}")
+        # logger.info(f"{func_id=}, {func_info=}")
         if func_id:
             return func_id, func_info
         
@@ -337,14 +333,14 @@ class CallAnalyzer(std_ast.NodeVisitor):
                     module_parts = other_info['module'].split('.')
                     for part in module_parts:
                         if part in self.import_tracker.imported_modules:
-                            logging.info(f"{other_id=}, {other_info=}")
+                            logger.info(f"{other_id=}, {other_info=}")
                             return other_id, other_info
         
         # Case 3: Check for suffix matches (handles module.func cases)
         # This is useful for cases like "helpers.validate_input" when the full name is 
         # "utils.helpers.validate_input" but we only see "helpers" in the code
         for func_id, func_info in self.registry.functions.items():
-            # logging.info(f"{func_id=} {func_info=}")
+            # logger.info(f"{func_id=} {func_info=}")
             func_full_name = func_info['full_name']
             func_name = func_full_name.split('.')[-1]
             # Check if the call name is a suffix of the full name
@@ -380,9 +376,9 @@ def extract_function_content(file_path, start_line, end_line):
         lines = f.readlines()
         # Subtract 1 from line numbers to convert to 0-based indices
         content = ''.join(lines[start_line-1:end_line])
-        # logging.warning(start_line)
-        # logging.warning(end_line)
-        # logging.warning(content)
+        # logger.warning(start_line)
+        # logger.warning(end_line)
+        # logger.warning(content)
         if content.endswith('\n'): # remove trailing new line for easier analysis later on. See build_analysis_prompt()
             content = content[:-1]
         return content
@@ -420,11 +416,11 @@ def extract_segments(file_path, function_info, call_segments):
     # Retrieve the function boundaries (absolute line numbers)
     start_line = function_info['lineno']  # absolute position of def 
     end_line = function_info['end_lineno']
-    # logging.warning(f"{start_line=}, {end_line=}")
+    # logger.warning(f"{start_line=}, {end_line=}")
     
     # Extract the function's own lines (this is used later for tokenizing comments)
     function_lines = source_lines[start_line-1:end_line]  # 0 is def
-    # logging.warning(f"{function_lines[-2:]=}")
+    # logger.warning(f"{function_lines[-2:]=}")
     relative_end_line = len(function_lines)  # needs +1 when indexing
     
     # Use tokenize to extract all comments falling inside the function boundary.
@@ -459,7 +455,7 @@ def extract_segments(file_path, function_info, call_segments):
         comment_map[comment['lineno']] = comment
     # print("comment_map")
     # print(comment_map)
-    logging.info(f"{call_map=}, {comment_map=}")
+    logger.info(f"{call_map=}, {comment_map=}")
     segments = []
 
     i = 1  # i is relative
@@ -534,7 +530,7 @@ def extract_segments(file_path, function_info, call_segments):
             for component in func_components:
                 if (component['start_lineno'] <= segment_abs_start and 
                     segment_abs_end <= component['end_lineno']):
-                    logging.info(f"attaching call to component: {segment=}")
+                    logger.info(f"attaching call to component: {segment=}")
                     segment['component_id'] = component['id']
                     break
             final_segments.append(segment)
@@ -560,7 +556,7 @@ def extract_segments(file_path, function_info, call_segments):
                 segment['component_id'] = component['id']
                 final_segments.append(segment)
                 segment_processed = True
-                logging.info(f"attaching call to component: {segment=}")
+                logger.info(f"attaching call to component: {segment=}")
                 break
                 
             # Case 2: Segment starts in this component but ends later
@@ -597,7 +593,7 @@ def extract_segments(file_path, function_info, call_segments):
                     break
                     
                 segment['content'] = remaining_content
-                logging.warning(f"spliting segment across component: {segment=}")
+                logger.warning(f"spliting segment across component: {segment=}")
                 # Continue to next component to process the remaining part
                 
             # Case 3: Segment starts before this component but ends within it
@@ -649,7 +645,7 @@ def extract_segments(file_path, function_info, call_segments):
                 
         # If segment wasn't processed (no matching component found), add it without a component ID
         if not segment_processed:
-            logging.warning(f"SEGMENT NOT ATTACHED: {segment=}")
+            logger.warning(f"SEGMENT NOT ATTACHED: {segment=}")
             # segment.pop('component_id', None)  # Remove any existing component_id
             segment['component_id'] = func_components[0]['id']
             final_segments.append(segment)
@@ -698,7 +694,7 @@ def build_registry(project_root):
         except ValueError:
             continue
     
-    logging.info(f"Found {registry.functions} functions")
+    logger.info(f"Found {registry.functions} functions")
     return registry
 
 def build_function_LLM_analysis(registry):
@@ -713,13 +709,13 @@ def build_function_LLM_analysis(registry):
         file_path = func_info['file_path']
         # Extract function content from the file based on line numbers
         # Note: lineno and end_lineno are absolute (file-based) line numbers
-        logging.info(f"{func_id}, {func_info}")
+        logger.info(f"{func_id}, {func_info}")
         func_content = extract_function_content(file_path, func_info['lineno'], func_info['end_lineno'])
         
         try:
             # Call LLM to analyze the function
             analysis = analyze_function(func_content, func_info['full_name'], provider="groq")
-            logging.info(f"{analysis=}")
+            logger.info(f"{analysis=}")
             # Store LLM-generated metadata in function info
             func_info['short_description'] = analysis['short_description']
             func_info['input_output_description'] = analysis['input_output_description']
@@ -728,7 +724,7 @@ def build_function_LLM_analysis(registry):
             # Process components
             components = []
             for i, comp in enumerate(analysis['components']):
-                logging.info(f"{comp=}")
+                logger.info(f"{comp=}")
                 # Note: LLM returns relative line numbers (1 = first line of function)
                 # Convert to absolute line numbers for storage
                 abs_start_line = func_info['lineno'] + comp['start_line'] - 1
@@ -754,7 +750,7 @@ def build_function_LLM_analysis(registry):
             
 def build_segments(registry):
     # Third pass: Analyze function calls and build segments
-    logging.info("Third pass: Analyzing function calls and building segments...")
+    logger.info("Third pass: Analyzing function calls and building segments...")
     for func_id, func_info in registry.functions.items():
         file_path = func_info['file_path']
         module_name = func_info['module']
@@ -787,8 +783,8 @@ def build_segments(registry):
             # Process segments
             call_segments = analyzer.segments
             if func_info['name'] == 'main': 
-                logging.info(f"{func_info=}\n{analyzer.calls=}\n{analyzer.segments=}")
-                logging.info(f"Seg: {call_segments}")
+                logger.info(f"{func_info=}\n{analyzer.calls=}\n{analyzer.segments=}")
+                logger.info(f"Seg: {call_segments}")
             all_segments = extract_segments(file_path, func_info, call_segments)
             
             # Add segments to the function

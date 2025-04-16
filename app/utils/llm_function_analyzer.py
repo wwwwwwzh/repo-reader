@@ -8,18 +8,13 @@ information is present in the response.
 
 import json
 import requests
-import logging
 import time
 import re
 import os
 from typing import Dict, List, Optional, Any, Tuple, Literal
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+from app.utils.logging_utils import logger
 
 # API Configuration
 # Note: You should set these via environment variables in production
@@ -48,11 +43,11 @@ def set_api_key(api_key: str, provider: str = "deepseek") -> None:
     if provider.lower() == "deepseek":
         global DEEPSEEK_API_KEY
         DEEPSEEK_API_KEY = api_key
-        logging.info(f"Set Deepseek API key")
+        logger.info(f"Set Deepseek API key")
     elif provider.lower() == "groq":
         global GROQ_API_KEY
         GROQ_API_KEY = api_key
-        logging.info(f"Set Groq API key")
+        logger.info(f"Set Groq API key")
     else:
         raise ValueError(f"Unsupported provider: {provider}. Use 'deepseek' or 'groq'")
 
@@ -91,7 +86,7 @@ def analyze_function(
         raise ValueError("Groq API key not set. Call set_api_key() with provider='groq' first.")
     
     # Build the prompt
-    logging.info(f"Analyzing function: {function_name_full} using {provider}")
+    logger.info(f"Analyzing function: {function_name_full} using {provider}")
     prompt = build_analysis_prompt(function_content, function_name_full)
     func_length = len(function_content.split('\n'))
     
@@ -106,7 +101,7 @@ def analyze_function(
             
             # Parse and validate the response
             analysis = parse_llm_response(response)
-            logging.info(f"Analysis received")
+            logger.info(f"Analysis received")
             
             analysis['function_name'] = function_name_full
             
@@ -140,7 +135,7 @@ def build_analysis_prompt(function_content: str, function_name_full: str) -> str
     # Add line numbers to the function content
     lines = function_content.split('\n')
     numbered_content = '\n'.join(f"{i+1:3d} | {line}" for i, line in enumerate(lines))
-    # logging.info(numbered_content)
+    # logger.info(numbered_content)
     
     prompt = """
 Analyze the following Python function and provide a structured analysis. Your analysis MUST include all of the following components:
@@ -212,7 +207,7 @@ def call_deepseek_api(prompt: str) -> str:
     }
     
     try:
-        logging.info("Sending request to Deepseek API")
+        logger.info("Sending request to Deepseek API")
         response = requests.post(
             DEEPSEEK_API_URL,
             headers=headers,
@@ -227,7 +222,7 @@ def call_deepseek_api(prompt: str) -> str:
         
         # Extract the response content based on Deepseek API structure
         try:
-            logging.info("Successfully received response from Deepseek API")
+            logger.info("Successfully received response from Deepseek API")
             return response_data["choices"][0]["message"]["content"]
         except (KeyError, IndexError) as e:
             raise LLMRequestError(f"Failed to extract content from API response: {str(e)}")
@@ -269,7 +264,7 @@ def call_groq_api(prompt: str) -> str:
     }
     
     try:
-        # logging.info("Sending request to Groq API")
+        # logger.info("Sending request to Groq API")
         response = requests.post(
             GROQ_API_URL,
             headers=headers,
@@ -284,7 +279,7 @@ def call_groq_api(prompt: str) -> str:
         
         # Extract the response content from the Groq API structure
         try:
-            logging.info("Successfully received response from Groq API")
+            logger.info("Successfully received response from Groq API")
             return response_data["choices"][0]["message"]["content"]
         except (KeyError, IndexError) as e:
             raise LLMRequestError(f"Failed to extract content from API response: {str(e)}")
@@ -335,7 +330,7 @@ def parse_llm_response(response_text: str) -> Dict[str, Any]:
         json.JSONDecodeError: If the response cannot be parsed as JSON
     """
     # Extract JSON from the response (it might be wrapped in markdown code blocks)
-    # logging.info(f"parse_llm_response {response_text=}")
+    # logger.info(f"parse_llm_response {response_text=}")
     json_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', response_text)
     
     if json_match:

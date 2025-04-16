@@ -10,7 +10,6 @@ from sqlalchemy.orm import sessionmaker
 from dulwich.repo import Repo
 import tempfile
 import shutil
-import logging
 import hashlib
 from sqlalchemy.ext.declarative import declarative_base
 from dotenv import load_dotenv
@@ -19,12 +18,8 @@ load_dotenv()
 Base = declarative_base()
 Base.metadata.reflect = True
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+from app.utils.logging_utils import logger
+
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app.utils.ast_parser import build_registry, build_function_LLM_analysis, build_segments, find_entry_points, build_tree_from_function
@@ -237,7 +232,7 @@ def store_registry_in_database(registry, repo_url, repo_hash, entry_points, sess
 
 
 
-def build_and_store_code_tree(repo_url, entry_points, db_uri, verbose=False, reuse_registry = [False, False, False]):
+def build_and_store_code_tree(repo_url, entry_points, db_uri, verbose=False, reuse_registry = [False, False, False], force_push=False):
     """
     Main function to build a code tree and store it in the database
     
@@ -250,6 +245,7 @@ def build_and_store_code_tree(repo_url, entry_points, db_uri, verbose=False, reu
     Returns:
         Repository hash
     """
+    logger.info(" ------------------------- ------------------------- ------------------------- -------------------------\n ------------------------- ------------------------- Building started -------------------------  -------------------------\n ------------------------- ------------------------- ------------------------- -------------------------")
     # Create temporary directory for repository
     repo_clone_dir = os.path.join("/home/webadmin/projects/code", "repos")
     # temp_dir = tempfile.mkdtemp(prefix="code_tree_")
@@ -258,7 +254,7 @@ def build_and_store_code_tree(repo_url, entry_points, db_uri, verbose=False, reu
     try:
         # Clone the repository
         if verbose:
-            print(f"Cloning repository {repo_url}...")
+            logger.info(f"Cloning repository {repo_url}...")
         
         # Create a simple GitManager class if not imported
         class SimpleGitManager:
@@ -273,10 +269,17 @@ def build_and_store_code_tree(repo_url, entry_points, db_uri, verbose=False, reu
                 repo_name = repo_url.split("/")[-1].replace(".git", "")
                 repo_hash = hash_url(repo_url, 'sha256')
                 repo_path = os.path.join(self.cache_dir, repo_hash)
-                print(f"Cloning repository to {repo_path}...")
+                logger.info(f"Cloning repository to {repo_path}...")
                 
-                if not os.path.exists(repo_path):
-                    clone(repo_url, repo_path, depth=1)
+                if os.path.exists(repo_path):
+                    if force_push:
+                        logger.info(f"Force clone is enabled. Removing existing directory: {repo_path}")
+                        shutil.rmtree(repo_path)
+                    else:
+                        logger.info(f"Directory already exists and force_clone is False: {repo_path}")
+
+                # Clone the repository (this will create the repo_path directory)
+                clone(repo_url, repo_path, depth=1)
                 
                 return Repo(repo_path), repo_path, repo_hash
         
@@ -286,12 +289,12 @@ def build_and_store_code_tree(repo_url, entry_points, db_uri, verbose=False, reu
         
         
         if verbose:
-            print(f"Repository cloned to {repo_path}")
-            print(f"Repository hash: {repo_hash}")
+            logger.info(f"Repository cloned to {repo_path}")
+            logger.info(f"Repository hash: {repo_hash}")
         
         # Scan the project
         if verbose:
-            print("Scanning project for functions...")
+            logger.info("--------------------------------------------------------------------------------\n----------------------------------------Scanning functions----------------------------------------\n--------------------------------------------------------------------------------")
         
         if reuse_registry[0]:
             registry = load_registry(os.path.join(registry_dir, f"{repo_hash}_1"))
@@ -299,7 +302,7 @@ def build_and_store_code_tree(repo_url, entry_points, db_uri, verbose=False, reu
             registry = build_registry(repo_path)
         
         if verbose:
-            print(f"Found {len(registry.functions)} functions")
+            logger.info(f"Found {len(registry.functions)} functions")
         
         # Find entry points
         entry_point_ids = []
@@ -313,7 +316,7 @@ def build_and_store_code_tree(repo_url, entry_points, db_uri, verbose=False, reu
                          func_info['full_name'].endswith(function_name))):
                         entry_point_ids.append(func_id)
                         if verbose:
-                            print(f"Found entry point: {func_info['full_name']}")
+                            logger.info(f"Found entry point: {func_info['full_name']}")
             else:
                 # Treat the whole file as an entry point
                 file_entry_points = []
@@ -321,24 +324,26 @@ def build_and_store_code_tree(repo_url, entry_points, db_uri, verbose=False, reu
                     if func_info['file_path'].endswith(entry_file):
                         file_entry_points.append(func_id)
                         if verbose:
-                            print(f"Found entry point: {func_info['full_name']}")
+                            logger.info(f"Found entry point: {func_info['full_name']}")
                 
                 # If we found functions in this file, add them all
                 if file_entry_points:
                     entry_point_ids.extend(file_entry_points)
         
         if not entry_point_ids:
-            print("No entry points found. Please check your entry point specifications.")
+            logger.info("No entry points found. Please check your entry point specifications.")
             return None
         
         save_registry(registry, os.path.join(registry_dir,f"{repo_hash}_1"))
         
+        logger.info("--------------------------------------------------------------------------------\n----------------------------------------LLM analysis----------------------------------------\n--------------------------------------------------------------------------------")
         if reuse_registry[1]:
             registry = load_registry(os.path.join(registry_dir, f"{repo_hash}_2"))
         else:
             registry = build_function_LLM_analysis(registry)
             save_registry(registry, os.path.join(registry_dir,f"{repo_hash}_2"))
-        
+            
+        logger.info("--------------------------------------------------------------------------------\n----------------------------------------Segment analysis----------------------------------------\n--------------------------------------------------------------------------------")
         if reuse_registry[2]:
             registry = load_registry(os.path.join(registry_dir, f"{repo_hash}_3"))
         else:
@@ -348,7 +353,8 @@ def build_and_store_code_tree(repo_url, entry_points, db_uri, verbose=False, reu
         
         # Connect to the database
         if verbose:
-            print(f"Connecting to database: {db_uri}")
+            logger.info("--------------------------------------------------------------------------------\n----------------------------------------Connetting to Database----------------------------------------\n--------------------------------------------------------------------------------")
+
         
         engine = create_engine(db_uri)
         
@@ -362,21 +368,21 @@ def build_and_store_code_tree(repo_url, entry_points, db_uri, verbose=False, reu
         # Store in database
         try:
             if verbose:
-                print("Storing data in database...")
+                logger.info("Storing data in database...")
             
             repo_record = store_registry_in_database(
                 registry, repo_url, repo_hash, entry_point_ids, session
             )
             
             if verbose:
-                print(f"Successfully stored data for repository {repo_url}")
-                print(f"Repository hash: {repo_hash}")
+                logger.info(f"Successfully stored data for repository {repo_url}")
+                logger.info(f"Repository hash: {repo_hash}")
             
             return repo_hash
             
         except Exception as e:
             session.rollback()
-            print(f"Error storing data: {str(e)}")
+            logger.info(f"Error storing data: {str(e)}")
             raise
         finally:
             session.close()
@@ -384,102 +390,24 @@ def build_and_store_code_tree(repo_url, entry_points, db_uri, verbose=False, reu
     finally:
         # Clean up
         # shutil.rmtree(temp_dir)
-        print("Done building and uploading tree")
+        logger.info("Done building and uploading tree")
 
 
-def query_and_print_tree(repo_hash, entry_id, db_uri, max_level=2, verbose=False):
+def str2bool(v):
     """
-    Query the database and print a function tree
-    
-    Args:
-        repo_hash: Repository hash
-        entry_id: Entry function ID
-        db_uri: Database URI
-        max_level: Maximum level to print
-        verbose: Whether to print verbose output
+    Convert a string to a boolean.
+    Accepts: "yes", "true", "t", "1" as True and
+    "no", "false", "f", "0" as False (case insensitive).
     """
-    # Connect to database
-    engine = create_engine(db_uri)
-    Session = sessionmaker(bind=engine)
-    session = Session()
-    
-    try:
-        # Get repository
-        repo = session.query(Repository).filter_by(id=repo_hash).first()
-        if not repo:
-            print(f"Repository with hash {repo_hash} not found")
-            return
-        
-        # Get entry function
-        function = session.query(Function).filter_by(id=entry_id).first()
-        if not function:
-            print(f"Function with ID {entry_id} not found")
-            return
-        
-        print("=" * 60)
-        print(f"FUNCTION TREE: {function.full_name}")
-        print(f"Repository: {repo.url}")
-        print("=" * 60)
-        
-        # Get segments for this function
-        segments = session.query(Segment).filter_by(function_id=entry_id).order_by(Segment.index).all()
-        
-        # Print function details
-        print(f"Function: {function.name}")
-        print(f"Full name: {function.full_name}")
-        print(f"File: {function.file_path}")
-        print(f"Lines: {function.lineno} - {function.end_lineno}")
-        
-        # Print segments if level >= 1
-        if max_level >= 1:
-            print("\nSEGMENTS:")
-            for segment in segments:
-                print(f"\n  [{segment.type.upper()}] Line {segment.lineno}")
-                
-                # For call segments, show target
-                if segment.type == 'call' and segment.target_id:
-                    target = session.query(Function).filter_by(id=segment.target_id).first()
-                    if target:
-                        print(f"  Calls: {target.full_name}")
-                
-                # Print content
-                content_lines = segment.content.split('\n')
-                for i, line in enumerate(content_lines[:10]):  # Limit to 10 lines
-                    print(f"    {i+1:3d} | {line}")
-                
-                if len(content_lines) > 10:
-                    print(f"    ... ({len(content_lines)-10} more lines)")
-                
-                # For call segments with level >= 2, show called function
-                if segment.type == 'call' and segment.target_id and max_level >= 2:
-                    target = session.query(Function).filter_by(id=segment.target_id).first()
-                    if target:
-                        # Get segments for the target function
-                        target_segments = session.query(Segment).filter_by(
-                            function_id=segment.target_id
-                        ).order_by(Segment.index).all()
-                        
-                        print(f"\n  CALLED FUNCTION: {target.name}")
-                        print(f"  Full name: {target.full_name}")
-                        print(f"  File: {target.file_path}")
-                        print(f"  Lines: {target.lineno} - {target.end_lineno}")
-                        
-                        # Print target segments if level >= 3
-                        if max_level >= 3:
-                            print("\n  TARGET SEGMENTS:")
-                            for target_segment in target_segments:
-                                print(f"\n    [{target_segment.type.upper()}] Line {target_segment.lineno}")
-                                
-                                # Limit content
-                                target_content_lines = target_segment.content.split('\n')
-                                for i, line in enumerate(target_content_lines[:5]):  # More limited
-                                    print(f"      {i+1:3d} | {line}")
-                                
-                                if len(target_content_lines) > 5:
-                                    print(f"      ... ({len(target_content_lines)-5} more lines)")
-    finally:
-        session.close()
-
+    if isinstance(v, bool):
+        return v
+    lower_v = v.lower()
+    if lower_v in ('yes', 'true', 't', '1'):
+        return True
+    elif lower_v in ('no', 'false', 'f', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError(f"Boolean value expected. Got '{v}' instead.")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Build and store a code tree")
@@ -494,33 +422,40 @@ if __name__ == "__main__":
     build_parser.add_argument("--db-uri", 
                             default="postgresql://codeuser:<code_password>@localhost:5432/code",
                             help="Database URI")
+    build_parser.add_argument("-f", "--force_push", action="store_true", help="reclone repo even if exist")
+    build_parser.add_argument(
+        '--reuse_registry',
+        nargs=3,  # Expect exactly 3 arguments
+        type=str2bool,  # Convert the string inputs to booleans using our helper
+        metavar=('BOOL1', 'BOOL2', 'BOOL3'),
+        default=[False, False, False],
+        help='reuse cache of [functions, llm analysis attached, segments attached]'
+    )
     build_parser.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
     
     # View command
-    view_parser = subparsers.add_parser("view", help="View a function tree")
-    view_parser.add_argument("repo_hash", help="Repository hash")
-    view_parser.add_argument("function_id", help="Function ID")
-    view_parser.add_argument("--level", type=int, default=2, help="Maximum level to print")
-    view_parser.add_argument("--db-uri",
-                           default="postgresql://codeuser:<code_password>@localhost:5432/code",
-                           help="Database URI")
-    view_parser.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
+    # view_parser = subparsers.add_parser("view", help="View a function tree")
+    # view_parser.add_argument("repo_hash", help="Repository hash")
+    # view_parser.add_argument("function_id", help="Function ID")
+    # view_parser.add_argument("--level", type=int, default=2, help="Maximum level to print")
+    # view_parser.add_argument("--db-uri",
+    #                        default="postgresql://codeuser:<code_password>@localhost:5432/code",
+    #                        help="Database URI")
+    # view_parser.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
     
     args = parser.parse_args()
     
     if args.command == "build":
         repo_hash = build_and_store_code_tree(
-            args.repo_url, args.entry_points, args.db_uri, args.verbose
+            args.repo_url, args.entry_points, args.db_uri, args.verbose, args.reuse_registry, args.force_push
         )
         
         if repo_hash:
-            print(f"Successfully built and stored code tree for {args.repo_url}")
-            print(f"Repository hash: {repo_hash}")
+            logger.info(f"Successfully built and stored code tree for {args.repo_url}")
+            logger.info(f"Repository hash: {repo_hash}")
     
     elif args.command == "view":
-        query_and_print_tree(
-            args.repo_hash, args.function_id, args.db_uri, args.level, args.verbose
-        )
+        print("NO LONGER SUPPORTED")
     
     else:
         parser.print_help()

@@ -48,22 +48,13 @@ def show_tree(repo_hash):
     
     return render_template('tree.html', repo_hash=repo_hash, repo_name=repo_name, repo_url=repo.url)
 
-@bp.route('/function-tree/<repo_hash>')
-def show_function_tree(repo_hash):
-    """Display the function tree view for a repository"""
-    # Check if repository exists
-    repo = Repository.query.get_or_404(repo_hash)
-    
-    # Get repository name from URL
-    repo_name = repo.url.split('/')[-1]
-    if repo_name.endswith('.git'):
-        repo_name = repo_name[:-4]
-    
-    return render_template('function_tree.html', repo_hash=repo_hash, repo_name=repo_name, repo_url=repo.url)
-
 @bp.route('/static/js/tree.js')
 def serve_tree_js():
     return send_from_directory(os.path.join(current_app.root_path, 'static/js'), 'tree.js')
+
+@bp.route('/static/css/<path:filename>')
+def css_files(filename):
+    return send_from_directory(os.path.join(current_app.root_path, 'static/css'), filename)
 
 @bp.route('/api/files/<repo_hash>')
 def get_file_structure(repo_hash):
@@ -211,6 +202,26 @@ def get_entry_functions(repo_hash):
         'is_entry': True
     } for func in entry_functions])
 
+@bp.route('/api/functions/<repo_hash>/all')
+def get_all_functions(repo_hash):
+    """Get all functions for a repository"""
+    # Verify repository exists
+    repo = Repository.query.get_or_404(repo_hash)
+    
+    # Get all functions for this repository
+    functions = Function.query.filter_by(repo_id=repo_hash).all()
+    
+    # Return as JSON
+    return jsonify([{
+        'id': func.id,
+        'name': func.name,
+        'full_name': func.full_name,
+        'file_path': func.file_path,
+        'module_name': func.module_name,
+        'is_entry': func.is_entry,
+        'short_description': func.short_description
+    } for func in functions])
+        
 @bp.route('/api/functions/<repo_hash>/<function_id>')
 def get_function_details(repo_hash, function_id):
     """Get detailed information about a function including its segments"""

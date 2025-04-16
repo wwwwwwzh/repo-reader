@@ -9,58 +9,86 @@ from app.utils.llm_function_analyzer import set_api_key, analyze_function
 from app.utils.logging_utils import logger
 
 
+
+
 class FunctionRegistry:
-    """Registry of all functions in a project"""
+    """
+    Registry of every function/method we’ve seen.
+
+    Fast indexes:
+        ctor_by_class      :  DemoApp         -> func_id
+        methods_by_class   :  DemoApp.run_demo -> func_id
+    """
     def __init__(self):
-        self.functions = {}  # Map of function_id -> function_info
-        self.module_functions = defaultdict(list)  # Map of module_name -> [function_ids]
-        self.id_counter = 0
-    
-    def add_function(self, module_name, func_name, file_path, lineno, end_lineno, class_name=None):
-        """Add a function to the registry"""
-        # Create a unique ID for this function
-        function_id = f"func_{self.id_counter}"
+        self.functions          = {}                  # func_id -> info dict
+        self.module_functions   = defaultdict(list)   # mod        -> [ids]
+        self.ctor_by_class      = {}                  # class      -> func_id
+        self.methods_by_class   = {}                  # cls.method -> func_id
+        self.id_counter         = 0
+
+    # ..........................................................
+    def add_function(self, module_name, func_name,
+                     file_path, lineno, end_lineno, class_name=None, param_order=None, param_types=None):
+
+        func_id     = f"func_{self.id_counter}"
         self.id_counter += 1
-        
-        # Determine the fully qualified name
-        if class_name:
-            full_name = f"{module_name}.{class_name}.{func_name}"
-            # Also add a simpler version for easier lookup
-            simple_name = f"{module_name}.{func_name}"
-        else:
-            full_name = f"{module_name}.{func_name}"
-            simple_name = full_name
-        
-        # Store function info
-        function_info = {
-            'id': function_id,
-            'name': func_name,
-            'full_name': full_name,
-            'simple_name': simple_name,
-            'module': module_name,
-            'class_name': class_name,
-            'file_path': file_path,
-            'lineno': lineno,
-            'end_lineno': end_lineno,
-            'callers': [],  # List of function IDs that call this function
-            'callees': [],  # List of function IDs this function calls
-            'segments': []  # Will be populated later
+
+        if class_name:                       # method
+            full_name   = f"{module_name}.{class_name}.{func_name}"
+            # simple_name = f"{module_name}.{func_name}"
+            key         = f"{class_name}.{func_name}"
+        else:                                # free function
+            full_name   = f"{module_name}.{func_name}"
+            # simple_name = full_name
+            key         = None
+
+        info = {
+            "id"        : func_id,
+            "name"      : func_name,
+            "full_name" : full_name,
+            # "simple_name": simple_name,
+            "module"    : module_name,
+            "class_name": class_name,        # ← keep the class!
+            "file_path" : file_path,
+            "lineno"    : lineno,
+            "end_lineno": end_lineno,
+            "callers"   : [],
+            "callees"   : [],
+            "segments"  : [],
+            
+            # for within function class method call
+            "param_order"          : param_order or [],   # always a list
+            "param_types"          : param_types or {},   # always a dict
+            "inferred_param_types" : {},                 # to be filled later
+
         }
+
+        #  ----  fast indexes  ----
+        if class_name:
+            if func_name == "__init__":
+                self.ctor_by_class[class_name] = func_id
+            self.methods_by_class[key] = func_id
+
+        self.functions[func_id] = info
+        self.module_functions[module_name].append(func_id)
+        return func_id
+
+    # ..........................................................
+    def get_function_by_name(self, full_or_simple):
         
-        # print(function_info)
-        
-        self.functions[function_id] = function_info
-        self.module_functions[module_name].append(function_id)
-        
-        # Return the ID for reference
-        return function_id
-    
-    def get_function_by_name(self, full_name):
-        """Look up a function by its fully qualified name"""
-        for func_id, func_info in self.functions.items():
-            if func_info['full_name'] == full_name or func_info['simple_name'] == full_name:
-                return func_id, func_info
+        for fid, finfo in self.functions.items():
+            if finfo["full_name"] == full_or_simple:
+            #    or finfo["simple_name"] == full_or_simple
+                return fid, finfo
         return None, None
+
+    def get_constructor(self, class_name):
+        fid = self.ctor_by_class.get(class_name)
+        return (fid, self.functions[fid]) if fid else (None, None)
+
+    def get_method(self, class_name, method_name):
+        fid = self.methods_by_class.get(f"{class_name}.{method_name}")
+        return (fid, self.functions[fid]) if fid else (None, None)
     
     def get_function_by_id(self, function_id):
         """Get function info by ID"""
@@ -128,6 +156,19 @@ class FunctionScanner(std_ast.NodeVisitor):
         self.module_name = module_name
         self.file_path = file_path
         self.current_class = None
+        
+    def _ann_to_str(self, ann):
+        if isinstance(ann, std_ast.Name):            # Foo
+            return ann.id
+        if isinstance(ann, std_ast.Attribute):       # pkg.Foo
+            return f"{self._ann_to_str(ann.value)}.{ann.attr}"
+        if isinstance(ann, std_ast.Subscript):       # list[Foo]
+            return self._ann_to_str(ann.value)
+        if isinstance(ann, (std_ast.Constant, std_ast.Constant)):     # "Foo"
+            logger.critical("YES")
+            return ann.value if isinstance(ann, std_ast.Constant) else ann.s
+        return ""
+
     
     def visit_ClassDef(self, node):
         """Handle class definitions"""
@@ -145,7 +186,21 @@ class FunctionScanner(std_ast.NodeVisitor):
         # Safely get the end line number
         lineno = node.lineno
         end_lineno = get_node_end_lineno(node)
-        
+        param_order = []
+        param_types = {}
+        # positional / keyword‑only args
+        for arg in node.args.args + node.args.kwonlyargs:
+            param_order.append(arg.arg)
+            if arg.annotation:
+                # DemoApp.Foo → Foo
+                param_types[arg.arg] = self._ann_to_str(arg.annotation).split(".")[-1]
+
+        # *args / **kwargs (keep names for matching but no types)
+        if node.args.vararg:
+            param_order.append("*" + node.args.vararg.arg)
+        if node.args.kwarg:
+            param_order.append("**" + node.args.kwarg.arg)
+            
         # Add function to registry
         self.registry.add_function(
             self.module_name, 
@@ -153,7 +208,9 @@ class FunctionScanner(std_ast.NodeVisitor):
             self.file_path,
             lineno,
             end_lineno,
-            self.current_class
+            self.current_class,
+            param_order=param_order,
+            param_types=param_types,
         )
         
         # Visit function body
@@ -170,7 +227,6 @@ class FunctionScanner(std_ast.NodeVisitor):
             len(node.test.comparators) == 1 and
             isinstance(node.test.comparators[0], std_ast.Constant) and
             node.test.comparators[0].value == "__main__"):
-            
             # This is a main block, register it as a function
             lineno = node.lineno
             end_lineno = get_node_end_lineno(node)
@@ -215,31 +271,90 @@ class SimpleImportTracker(std_ast.NodeVisitor):
 
 
 class CallAnalyzer(std_ast.NodeVisitor):
-    """Analyze function calls within a function"""
-    def __init__(self, registry, function_id, module_name, file_path, source_lines):
-        self.registry = registry
-        self.function_id = function_id
-        self.module_name = module_name
-        self.file_path = file_path
-        self.source_lines = source_lines
-        self.import_tracker = SimpleImportTracker()
-        self.calls = []
-        self.segments = []
+    """
+    Understands                     Resolves to
+        DemoApp()               →   DemoApp.__init__
+        demo.run_demo()         →   DemoApp.run_demo
+        self.helper(...)        →   CurrentClass.helper
+    """
+    def __init__(self, registry, function_id, module_name,
+                 file_path, source_lines, function_info):
+        self.registry        = registry
+        self.function_id     = function_id
+        self.module_name     = module_name
+        self.file_path       = file_path
+        self.source_lines    = source_lines
+
+        self.import_tracker  = SimpleImportTracker()
+        self.calls           = []
+        self.segments        = []
+        self.var_class_map   = {}                          # demo → DemoApp
+        self.current_class   = function_info["class_name"] # None for free func
+
+        with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+            tree = std_ast.parse(f.read())
+        self.import_tracker.visit(tree)
         
-        # Initialize import tracker first
-        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-            try:
-                tree = std_ast.parse(f.read())
-                self.import_tracker.visit(tree)
-            except Exception as e:
-                print(f"Error parsing imports in {file_path}: {e}")
-    
+        self.var_class_map = {
+            **function_info.get("param_types", {}),
+            **self.var_class_map
+        }
+
+
+    # ..........................................................
+    #   Track “demo = DemoApp()”
+    # ..........................................................
+    def visit_Assign(self, node):
+        if isinstance(node.value, std_ast.Call):
+            cls_name = self._get_call_name(node.value.func)
+            if cls_name:
+                cls_simple = cls_name.split(".")[-1]
+                for tgt in node.targets:
+                    if isinstance(tgt, std_ast.Name):
+                        self.var_class_map[tgt.id] = cls_simple
+        self.generic_visit(node)
+        
+        
     def visit_Call(self, node):
         """Handle function calls"""
         callee_name = self._get_call_name(node.func)
+        # logger.critical(callee_name)
         if callee_name:
             # Look up the callee in the registry
             callee_id, callee_info = self.find_matching_function(callee_name)
+            callee_info = self.registry.get_function_by_id(callee_id)
+            if not callee_info:                # safety
+                return
+
+            # 1. positional arguments ------------------------------------------------
+            for formal, actual in zip(callee_info["param_order"], node.args):
+                # ignore *args / **kwargs markers in the formal list
+                if formal.startswith("*"):
+                    continue
+
+                if isinstance(actual, std_ast.Name):
+                    actual_name = actual.id
+                    if actual_name in self.var_class_map:           # we know its class
+                        cls = self.var_class_map[actual_name]
+                        callee_info["inferred_param_types"][formal] = cls
+
+            # 2. keyword arguments ---------------------------------------------------
+            for kw in node.keywords:
+                if kw.arg is None:          # **kwargs, skip
+                    continue
+                formal = kw.arg
+                if isinstance(kw.value, std_ast.Name):
+                    actual_name = kw.value.id
+                    if actual_name in self.var_class_map:
+                        cls = self.var_class_map[actual_name]
+                        callee_info["inferred_param_types"][formal] = cls
+
+            for formal, actual in zip(callee_info['param_order'], node.args):
+                if isinstance(actual, std_ast.Name):
+                    actual_var = actual.id
+                    if actual_var in self.var_class_map:
+                        # stash this for a later pass
+                        callee_info.setdefault('inferred_param_types', {})[formal] = self.var_class_map[actual_var]
             if callee_id:
                 # Get the call line from source
                 start_line = node.lineno
@@ -295,65 +410,50 @@ class CallAnalyzer(std_ast.NodeVisitor):
         return None
     
     def find_matching_function(self, call_name):
-        """
-        Find the best matching function for a given call name.
-        This handles different cases:
-        1. Direct match by full name
-        2. Match by simple name when imported
-        3. Match by suffix (e.g., 'helpers.validate_input' matches 'utils.helpers.validate_input')
-        """
-        # logger.info(f"{call_name=}, {self.import_tracker.imported_modules=}")
-        # Case 1: Direct match by full name
-        func_id, func_info = self.registry.get_function_by_name(call_name)
-        # logger.info(f"{func_id=}, {func_info=}")
-        if func_id:
-            return func_id, func_info
-        
-        # Case 2: If it's a simple name (no dots), check if it might be an imported function
-        if '.' not in call_name:
-            # Check if we have an import statement for this function
-            if call_name in self.import_tracker.from_imports:
-                module = self.import_tracker.from_imports[call_name]
-                func_full_name = f"{module}.{call_name}"
-                func_id, func_info = self.registry.get_function_by_name(func_full_name)
-                if func_id:
-                    return func_id, func_info
-            
-            # Try matching against any function with the same name
-            # First look in current module (higher priority)
-            current_module_name = f"{self.module_name}.{call_name}"
-            func_id, func_info = self.registry.get_function_by_name(current_module_name)
-            if func_id:
-                return func_id, func_info
-                
-            # Then try all other functions
-            for other_id, other_info in self.registry.functions.items():
-                if other_info['name'] == call_name:
-                    # Check if the module is imported
-                    module_parts = other_info['module'].split('.')
-                    for part in module_parts:
-                        if part in self.import_tracker.imported_modules:
-                            logger.info(f"{other_id=}, {other_info=}")
-                            return other_id, other_info
-        
-        # Case 3: Check for suffix matches (handles module.func cases)
-        # This is useful for cases like "helpers.validate_input" when the full name is 
-        # "utils.helpers.validate_input" but we only see "helpers" in the code
-        for func_id, func_info in self.registry.functions.items():
-            # logger.info(f"{func_id=} {func_info=}")
-            func_full_name = func_info['full_name']
-            func_name = func_full_name.split('.')[-1]
-            # Check if the call name is a suffix of the full name
-            if func_full_name.endswith(call_name) and (
-                # Make sure the boundaries match to avoid partial matches
-                len(func_name) == len(call_name)
-            ):
-                # Verify that the module is imported
-                func_module = func_info['module']
-                if func_module in self.import_tracker.imported_modules:
-                    return func_id, func_info
-        
+        # logger.critical(call_name)
+        # --- 1. direct match (free function or full path) ------------------
+        fid, finfo = self.registry.get_function_by_name(call_name)
+        if fid:
+            return fid, finfo
+
+        # --- 2. imported “from x import foo” -------------------------------
+        if "." not in call_name and call_name in self.import_tracker.from_imports:
+            mod   = self.import_tracker.from_imports[call_name]
+            return self.registry.get_function_by_name(f"{mod}.{call_name}")
+
+        # --- 3. same‑module optimisation ----------------------------------
+        if "." not in call_name:
+            fid, finfo = self.registry.get_function_by_name(f"{self.module_name}.{call_name}")
+            if fid:
+                return fid, finfo
+
+        # --- 4. class constructor  (DemoApp()) -----------------------------
+        simple_cls = call_name.split(".")[-1]
+        fid, finfo = self.registry.get_constructor(simple_cls)
+        if fid:                                 # we already found a ctor
+            return fid, finfo
+
+        # --- 5. instance‑method  (demo.run_demo) --------------------------
+        if "." in call_name:
+            base, method = call_name.split(".", 1)
+            target_cls   = None
+
+            if base in self.var_class_map:              # demo.run_demo
+                target_cls = self.var_class_map[base]
+            elif base in {"self", "cls"} and self.current_class:  # self.run_demo
+                target_cls = self.current_class
+
+            if target_cls:
+                return self.registry.get_method(target_cls, method)
+
+        # --- 6. suffix heuristic (“helpers.validate_input”) ---------------
+        for fid, finfo in self.registry.functions.items():
+            if finfo["full_name"].endswith(call_name):
+                if finfo["module"] in self.import_tracker.imported_modules:
+                    return fid, finfo
+
         return None, None
+
 
 
 
@@ -748,7 +848,7 @@ def build_function_LLM_analysis(registry):
             traceback.print_exc()
     return registry
             
-def build_segments(registry):
+def build_segments_helper(registry):
     # Third pass: Analyze function calls and build segments
     logger.info("Third pass: Analyzing function calls and building segments...")
     for func_id, func_info in registry.functions.items():
@@ -777,7 +877,7 @@ def build_segments(registry):
             dedented = textwrap.dedent(function_body)
             tree = std_ast.parse(dedented)
                 
-            analyzer = CallAnalyzer(registry, func_id, module_name, file_path, function_body_lines)
+            analyzer = CallAnalyzer(registry, func_id, module_name, file_path, function_body_lines, func_info)
             analyzer.visit(tree)
             
             # Process segments
@@ -788,14 +888,34 @@ def build_segments(registry):
             all_segments = extract_segments(file_path, func_info, call_segments)
             
             # Add segments to the function
+            func_info["segments"] = []
             for segment in all_segments:
                 registry.add_segment(func_id, segment)
-                
+                        
         except Exception as e:
             print(f"Error analyzing function {func_info['full_name']}: {e}")
             traceback.print_exc()
     return registry
 
+
+def propagate_types(registry, max_rounds=5):
+    for _round in range(max_rounds):
+        changed = False
+        for fid, finfo in registry.functions.items():
+            for name, cls in list(finfo["inferred_param_types"].items()):
+                if name not in finfo["param_types"]:
+                    finfo["param_types"][name] = cls
+                    changed = True
+            finfo["inferred_param_types"].clear()
+        if not changed:
+            break
+    return registry
+
+def build_segments(registry):
+    for _ in range(2):
+        registry = build_segments_helper(registry)
+        registry = propagate_types(registry)
+    return registry
 
 def find_entry_points(registry, entry_files):
     """

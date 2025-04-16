@@ -89,6 +89,8 @@ def analyze_function(
     logger.info(f"Analyzing function: {function_name_full} using {provider}")
     prompt = build_analysis_prompt(function_content, function_name_full)
     func_length = len(function_content.split('\n'))
+    # logger.warning(function_content)
+    # logger.warning(prompt)
     
     # Make the request with retries
     for attempt in range(max_retries):
@@ -101,7 +103,7 @@ def analyze_function(
             
             # Parse and validate the response
             analysis = parse_llm_response(response)
-            logger.info(f"Analysis received")
+            logger.info(f"Analysis received: {analysis=}")
             
             analysis['function_name'] = function_name_full
             
@@ -375,8 +377,12 @@ def validate_slots(func_length: int, analysis: Dict[str, Any]) -> None:
     if analysis["components"][0]['start_line'] != 1:
         raise SlotFillingError("'components' must start at line 1")
     
-    if analysis["components"][-1]['end_line'] != func_length:
-        raise SlotFillingError("'components' must end at last line of function")
+    llm_last_line = analysis["components"][-1]['end_line']
+    if llm_last_line != func_length:
+        if llm_last_line < (func_length-3):
+            raise SlotFillingError(f"last component's end too far from real end {llm_last_line=}, {func_length=}")
+        logger.warning("LLM analysis endline one line short of function length, manually correcting")
+        analysis["components"][-1]['end_line'] = func_length
     
     for i, component in enumerate(analysis["components"]):
         component_required_fields = [

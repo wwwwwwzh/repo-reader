@@ -1,4 +1,8 @@
-// Global variables for state management
+// import dotenv from '../../../node_modules/dotenv';
+// dotenv.config();
+// const repos_dir = process.env.REPO_CACHE_DIR;
+const repos_dir = '/home/webadmin/projects/code/repos';
+
 let currentFunctionId = null;
 let repoHash = null;
 let pinnedFunctions = [];
@@ -773,7 +777,6 @@ async function loadFileContent(filePath) {
     const repoHash = document.querySelector('.repo-info').dataset.repoHash;
 
     // Construct complete file path for the repository
-    const repos_dir = '/home/webadmin/projects/code/repos';
     const completeFilePath = `${repos_dir}/${repoHash}/${filePath}`;
 
     // Fetch file content using the complete path

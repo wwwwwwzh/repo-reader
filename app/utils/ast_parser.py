@@ -3,8 +3,7 @@ import json, traceback
 import os
 from pathlib import Path
 from collections import defaultdict
-import tokenize
-import re
+import re, textwrap, tokenize
 import logging
 from app.utils.llm_function_analyzer import set_api_key, analyze_function
 
@@ -779,7 +778,8 @@ def build_segments(registry):
         
         # Parse the function body to find calls
         try:
-            tree = std_ast.parse(function_body)
+            dedented = textwrap.dedent(function_body)
+            tree = std_ast.parse(dedented)
                 
             analyzer = CallAnalyzer(registry, func_id, module_name, file_path, function_body_lines)
             analyzer.visit(tree)

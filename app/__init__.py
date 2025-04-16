@@ -2,6 +2,8 @@ from flask import Flask, url_for
 from flask_sqlalchemy import SQLAlchemy
 from celery import Celery
 import os
+from dotenv import load_dotenv
+load_dotenv()
 
 db = SQLAlchemy()
 celery = Celery()

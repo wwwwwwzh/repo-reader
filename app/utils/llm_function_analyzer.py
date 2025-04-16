@@ -289,63 +289,47 @@ def call_groq_api(prompt: str) -> str:
     except requests.RequestException as e:
         raise LLMRequestError(f"API request failed: {str(e)}")
     
-def parse_llm_response(response_text: str) -> Dict[str, Any]:
-    """
-    Parse the LLM response to extract the JSON analysis
-    
-    Args:
-        response_text: The raw text response from the LLM
-    
-    Returns:
-        Dict containing the parsed analysis
-    
-    Raises:
-        json.JSONDecodeError: If the response cannot be parsed as JSON
-    """
-    # Extract JSON from the response (it might be wrapped in markdown code blocks)
-    json_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', response_text)
-    
-    if json_match:
-        json_str = json_match.group(1)
-    else:
-        # If no code blocks found, try to use the whole response
-        json_str = response_text
-    
-    try:
-        return json.loads(json_str)
-    except json.JSONDecodeError as e:
-        logger.error(f"Failed to parse JSON response: {response_text}")
-        raise
-
+CODE_FENCE_RE = re.compile(
+    r"```(?:json)?\s*([\s\S]*?)\s*```",       # match ```json … ```
+    flags=re.IGNORECASE
+)
 
 def parse_llm_response(response_text: str) -> Dict[str, Any]:
     """
-    Parse the LLM response to extract the JSON analysis
-    
-    Args:
-        response_text: The raw text response from the LLM
-    
-    Returns:
-        Dict containing the parsed analysis
-    
-    Raises:
-        json.JSONDecodeError: If the response cannot be parsed as JSON
+    Return the JSON object from the *last* fenced code block in an LLM reply.
+    If no fenced block exists, attempt to parse the last {...} object instead.
+    Raises json.JSONDecodeError on failure.
     """
-    # Extract JSON from the response (it might be wrapped in markdown code blocks)
-    # logger.info(f"parse_llm_response {response_text=}")
-    json_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', response_text)
-    
-    if json_match:
-        json_str = json_match.group(1)
+    # 1️⃣ Collect every fenced block, pick the last one
+    fenced_blocks = CODE_FENCE_RE.findall(response_text)
+    if fenced_blocks:
+        candidate = fenced_blocks[-1].strip()
+
     else:
-        # If no code blocks found, try to use the whole response
-        json_str = response_text
-    
-    try:
-        return json.loads(json_str)
-    except json.JSONDecodeError as e:
-        logger.error(f"Failed to parse JSON response: {response_text}")
-        raise
+        # 2️⃣ No fences – look for the last top‑level {...} blob
+        #    This is intentionally simple; it works because LLM answers are short-ish.
+        brace_spans = [(m.start(), m.group()) for m in re.finditer(r'\{', response_text)]
+        if not brace_spans:
+            raise json.JSONDecodeError("No JSON object found", response_text, 0)
+
+        start = brace_spans[-1][0]           # position of final '{'
+        candidate = response_text[start:].strip()
+
+        # Trim anything after the matching closing brace
+        # (keeps parser from choking on trailing commentary)
+        depth = 0
+        for i, ch in enumerate(candidate):
+            if ch == '{':
+                depth += 1
+            elif ch == '}':
+                depth -= 1
+                if depth == 0:
+                    candidate = candidate[: i + 1]
+                    break
+
+    # 3️⃣ Parse
+    return json.loads(candidate)
+
 
 def validate_slots(func_length: int, analysis: Dict[str, Any]) -> None:
     """

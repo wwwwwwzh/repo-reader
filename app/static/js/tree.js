@@ -24,6 +24,12 @@ document.addEventListener('DOMContentLoaded', () => {
   loadEntryFunctions(repoHash);
 });
 
+function scrollToHighlight () {
+  (document.querySelector('.strong-highlight') ||
+   document.querySelector('.function-highlight'))
+  ?.scrollIntoView({ behavior: 'smooth' });
+}
+
 // Set up upper right panel toggling functionality
 function setupPanelToggling() {
   const panelHeader = document.getElementById('panel-header');
@@ -1366,9 +1372,7 @@ async function loadFunctionDetails(repoHash, functionId) {
     const parentNode = document.querySelector(`.node[data-id="${functionId}"]`);
 
     if (parentNode && parentNode.dataset.type === 'function') {
-      document
-        .querySelector('.function-highlight')
-        .scrollIntoView({ behavior: 'smooth' });
+      scrollToHighlight()
     }
   } catch (error) {
     console.error('Error loading function details:', error);
@@ -1479,6 +1483,7 @@ async function displayComponentDetails(component, segments, functionId) {
                 <h3>Complete Function Code</h3>
                 ${codeView}
             `;
+            scrollToHighlight()
     } catch (error) {
       console.error('Error loading function code for component:', error);
       lowerPanel.innerHTML = '<p>Error loading function code.</p>';
@@ -1492,6 +1497,7 @@ async function displayComponentDetails(component, segments, functionId) {
                 <h3>Complete Function Code</h3>
                 ${codeView}
             `;
+            scrollToHighlight()
     } catch (error) {
       console.error('Error updating component highlighting:', error);
     }
@@ -1655,9 +1661,7 @@ async function displaySegmentDetails(segment, targetFunctionId) {
   }
 
   if (segment.type === 'call') {
-    document
-      .querySelector('.function-highlight')
-      .scrollIntoView({ behavior: 'smooth' });
+    scrollToHighlight()
   }
 }
 
@@ -1878,7 +1882,7 @@ async function buildFullFunctionCodeView(
     // Add a scroll indicator to jump to the function
     const scrollToFunction = `
             <div class="scroll-indicator">
-                <button onclick="document.querySelector('.function-highlight').scrollIntoView({behavior: 'smooth'})">
+                <button onclick="scrollToHighlight()">
                     Scroll to Function (Line ${functionStart})
                 </button>
             </div>

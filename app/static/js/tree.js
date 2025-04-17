@@ -4,6 +4,8 @@
 const repos_dir = '/home/webadmin/projects/code/repos';
 
 let currentFunctionId = null;
+let currentFilePath = null;
+
 let repoHash = null;
 let pinnedFunctions = [];
 const searchCache = {};
@@ -26,13 +28,16 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function scrollToHighlight() {
+  if (isProcessingClick) {
+    return; // code line click simulates tree-nav click without scroll since the element has to be within view already
+  }
   (
     document.querySelector('.strong-highlight') ||
     document.querySelector('.function-highlight')
   )?.scrollIntoView({ behavior: 'smooth' });
 }
 
-window.scrollToHighlight = scrollToHighlight
+window.scrollToHighlight = scrollToHighlight;
 
 function setUpScrollButton() {
   const codeView = document.querySelector('.lower-panel');
@@ -733,7 +738,7 @@ async function loadFileStructure(repoHash) {
 }
 
 function buildFileTree(files, parentElement) {
-  console.warn(files);
+  // console.warn(files);
   // Group files by directory
   const fileGroups = {};
 
@@ -759,7 +764,7 @@ function buildFileTree(files, parentElement) {
 
 function buildDirectoryNode(dirPath, fileGroups, parentElement) {
   const dirFiles = fileGroups[dirPath] || [];
-  console.log(dirFiles);
+  // console.log(dirFiles);
 
   // Sort directories first, then files
   dirFiles.sort((a, b) => {
@@ -811,9 +816,12 @@ function buildDirectoryNode(dirPath, fileGroups, parentElement) {
     parentElement.appendChild(fileNode);
   });
 }
-
+// Update the loadFileContent function to store the file path when a file is loaded
 async function loadFileContent(filePath) {
   try {
+    // Store the current file path globally
+    currentFilePath = filePath;
+    
     // Show loading indicators
     const upperPanel = document.querySelector('.upper-panel');
     const lowerPanel = document.getElementById('lower-panel');
@@ -853,10 +861,10 @@ async function loadFileContent(filePath) {
 
     // Update upper panel with file info
     panelContent.innerHTML = `
-            <div class="function-details">
-                <div class="file-path">${filePath}</div>
-            </div>
-        `;
+      <div class="function-details">
+        <div class="file-path">${filePath}</div>
+      </div>
+    `;
 
     // Update lower panel with file content
     const fileLines = fileContent.split('\n');
@@ -864,21 +872,21 @@ async function loadFileContent(filePath) {
 
     fileLines.forEach((line, index) => {
       codeHTML += `
-                <div class="code-line">
-                    <span class="line-number">${index + 1}</span>
-                    <span class="line-content"><code class="language-python">${escapeHTML(
-                      line
-                    )}</code></span>
-                </div>
-            `;
+        <div class="code-line">
+          <span class="line-number">${index + 1}</span>
+          <span class="line-content"><code class="language-python">${escapeHTML(
+            line
+          )}</code></span>
+        </div>
+      `;
     });
 
     codeHTML += '</div>';
 
     lowerPanel.innerHTML = `
-            <h3>File Content</h3>
-            ${codeHTML}
-        `;
+      <h3>File Content</h3>
+      ${codeHTML}
+    `;
 
     // Reset current function ID since we're viewing a full file
     currentFunctionId = null;
@@ -1283,7 +1291,7 @@ function addCallSegmentNode(
   segmentNode.className = 'node';
   segmentNode.dataset.type = 'segment';
   segmentNode.dataset.segmentType = 'call';
-  segmentNode.dataset.functionId = parentFunctionId;
+  segmentNode.dataset.functionId = segment.target_function.id;
 
   const segmentLabel = document.createElement('span');
   segmentLabel.className = 'caret node-segment-call';
@@ -1357,7 +1365,246 @@ function clearActiveNodes() {
   });
 }
 
-// Load function details
+
+// Track if we've already added listeners to prevent duplication
+let listenersInitialized = false;
+
+// Function to add click listeners to code lines
+function addCodeLineListeners() {
+  // Prevent adding listeners multiple times
+  if (listenersInitialized) return;
+  listenersInitialized = true;
+
+  // Get the lower panel (where the code is displayed)
+  const lowerPanel = document.getElementById('lower-panel');
+
+  // Remove any existing listeners (just to be safe)
+  lowerPanel.removeEventListener('click', handleCodeLineClick);
+
+  // Add a delegated event listener to the lower panel
+  lowerPanel.addEventListener('click', handleCodeLineClick);
+
+  console.log('Code line listeners added.');
+}
+
+// Handler function for code line clicks
+// Update the handleCodeLineClick function to use the stored file path
+function handleCodeLineClick(event) {
+  // Find the clicked code line
+  const codeLine = event.target.closest('.code-line');
+  if (!codeLine) return; // Exit if click wasn't on a code line
+
+  // Get the line number
+  const lineNumber = parseInt(
+    codeLine.querySelector('.line-number').textContent
+  );
+  if (isNaN(lineNumber)) return; // Exit if line number is not valid
+
+  // Get repository hash
+  const repoHash = document.querySelector('.repo-info').dataset.repoHash;
+  
+  // Use the global file path variable, or try to extract it if not available
+  let filePath = currentFilePath;
+  
+  if (!filePath) {
+    // Try to get file path from the function details panel if we're looking at a function
+    const filePathElement = document.querySelector('.panel-content .file-path');
+    if (filePathElement) {
+      filePath = filePathElement.textContent.trim();
+    }
+    
+    // If still not found, try to get it from the panel title
+    if (!filePath) {
+      const panelTitle = document.querySelector('.panel-title').textContent;
+      if (panelTitle.startsWith('File:')) {
+        filePath = panelTitle.replace('File:', '').trim();
+      }
+    }
+  }
+  
+  if (!filePath) {
+    console.warn("No file path found - can't locate function");
+    showTemporaryNotification("Can't determine current file path", "error");
+    return;
+  }
+  
+  // If we're viewing a function, check if the click is inside that function
+  if (currentFunctionId) {
+    // Fetch data about the current function to compare line numbers
+    fetch(`/code/api/functions/${repoHash}/${currentFunctionId}`)
+      .then(response => response.json())
+      .then(functionData => {
+        const functionStartLine = functionData.lineno;
+        const functionEndLine = functionData.end_lineno;
+        
+        // Check if the clicked line is within the current function's range
+        if (lineNumber >= functionStartLine && lineNumber <= functionEndLine) {
+          // Use existing behavior to highlight the component
+          findAndHighlightComponent(currentFunctionId, lineNumber);
+        } else {
+          // Line is outside the current function, find the function at this line
+          findFunctionAtLine(repoHash, filePath, lineNumber);
+        }
+      })
+      .catch(error => {
+        console.error("Error fetching function data:", error);
+        // If we can't determine, try to find a function at the clicked line
+        findFunctionAtLine(repoHash, filePath, lineNumber);
+      });
+  } else {
+    // No function is currently loaded, try to find a function at this line
+    findFunctionAtLine(repoHash, filePath, lineNumber);
+  }
+}
+
+// Add this new function to find functions at specific lines
+function findFunctionAtLine(repoHash, filePath, lineNumber) {
+  // Show a small loading indicator
+  const notification = document.createElement('div');
+  notification.className = 'search-notification';
+  notification.innerHTML = 'Finding function...';
+  notification.style.position = 'fixed';
+  notification.style.top = '10px';
+  notification.style.right = '10px';
+  notification.style.padding = '8px 12px';
+  notification.style.background = 'rgba(0, 0, 0, 0.7)';
+  notification.style.color = 'white';
+  notification.style.borderRadius = '4px';
+  notification.style.zIndex = '9999';
+  document.body.appendChild(notification);
+  
+  // Use our new API endpoint to get functions in this file
+  fetch(`/code/api/functions/${repoHash}/file?path=${encodeURIComponent(filePath)}`)
+    .then(response => response.json())
+    .then(functionsInFile => {
+      // Find the function that contains this line
+      const matchingFunction = functionsInFile.find(func => 
+        lineNumber >= func.lineno && lineNumber <= func.end_lineno
+      );
+      
+      // Remove the notification
+      document.body.removeChild(notification);
+      
+      if (matchingFunction) {
+        // Add to custom functions list
+        addToCustomFunctionsList(
+          matchingFunction.id,
+          matchingFunction.name,
+          matchingFunction.full_name || matchingFunction.file_path
+        );
+        
+        // Load function details
+        loadFunctionDetails(repoHash, matchingFunction.id);
+        
+        // Show a success notification
+        showTemporaryNotification(`Found function: ${matchingFunction.name}`, 'success');
+        
+        console.log(`Found function at line ${lineNumber}: ${matchingFunction.name}`);
+      } else {
+        console.log(`No function found at line ${lineNumber}`);
+        // Show a notification to the user
+        showTemporaryNotification('No function found at this line', 'warning');
+      }
+    })
+    .catch(error => {
+      console.error('Error finding function at line:', error);
+      
+      // Fallback to using the all functions endpoint if the file endpoint fails
+      fetch(`/code/api/functions/${repoHash}/all`)
+        .then(response => response.json())
+        .then(allFunctions => {
+          // Find functions in this file
+          const functionsInFile = allFunctions.filter(func => {
+            const funcPath = func.file_path;
+            return funcPath === filePath || 
+                   funcPath.endsWith(filePath) || 
+                   filePath.endsWith(funcPath) || 
+                   funcPath.includes(filePath) || 
+                   filePath.includes(funcPath);
+          });
+          
+          // Find the function that contains this line
+          const matchingFunction = functionsInFile.find(func => 
+            lineNumber >= func.lineno && lineNumber <= func.end_lineno
+          );
+          
+          if (matchingFunction) {
+            // Add to custom functions list
+            addToCustomFunctionsList(
+              matchingFunction.id,
+              matchingFunction.name, 
+              matchingFunction.full_name || matchingFunction.file_path
+            );
+            
+            // Load function details
+            loadFunctionDetails(repoHash, matchingFunction.id);
+            
+            showTemporaryNotification(`Found function: ${matchingFunction.name}`, 'success');
+          } else {
+            showTemporaryNotification('No function found at this line', 'warning');
+          }
+        })
+        .catch(err => {
+          console.error('Fallback search failed:', err);
+          showTemporaryNotification('Error finding function', 'error');
+        })
+        .finally(() => {
+          if (notification.parentNode) {
+            document.body.removeChild(notification);
+          }
+        });
+    });
+}
+
+// Add this helper function to show temporary notifications
+function showTemporaryNotification(message, type = 'info') {
+  // Create notification element
+  const notification = document.createElement('div');
+  notification.className = 'notification';
+  notification.innerHTML = message;
+  notification.style.position = 'fixed';
+  notification.style.top = '10px';
+  notification.style.right = '10px';
+  notification.style.padding = '8px 12px';
+  notification.style.borderRadius = '4px';
+  notification.style.zIndex = '9999';
+  notification.style.maxWidth = '300px';
+  notification.style.boxShadow = '0 2px 10px rgba(0,0,0,0.2)';
+  
+  // Set style based on notification type
+  switch(type) {
+    case 'success':
+      notification.style.background = '#4caf50';
+      notification.style.color = 'white';
+      break;
+    case 'warning':
+      notification.style.background = '#ff9800';
+      notification.style.color = 'white';
+      break;
+    case 'error':
+      notification.style.background = '#f44336';
+      notification.style.color = 'white';
+      break;
+    default: // info
+      notification.style.background = '#2196f3';
+      notification.style.color = 'white';
+  }
+  
+  // Add to document
+  document.body.appendChild(notification);
+  
+  // Remove after 3 seconds
+  setTimeout(() => {
+    notification.style.opacity = '0';
+    notification.style.transition = 'opacity 0.5s';
+    setTimeout(() => {
+      if (notification.parentNode) {
+        document.body.removeChild(notification);
+      }
+    }, 500);
+  }, 3000);
+}
+
 async function loadFunctionDetails(repoHash, functionId) {
   try {
     // Skip reloading if it's the same function
@@ -1387,6 +1634,9 @@ async function loadFunctionDetails(repoHash, functionId) {
 
     // Fetch function details
     const functionData = await fetchFunctionDetails(repoHash, functionId);
+    
+    // Store the file path for this function
+    currentFilePath = functionData.file_path;
 
     // Update panel title
     panelTitle.textContent = `Function: ${functionData.name}`;
@@ -1397,9 +1647,9 @@ async function loadFunctionDetails(repoHash, functionId) {
     // Update lower panel with complete function code
     const codeView = await buildFullFunctionCodeView(functionData);
     lowerPanel.innerHTML = `
-            <h3>Complete Function Code</h3>
-            ${codeView}
-        `;
+      <h3>Complete Function Code</h3>
+      ${codeView}
+    `;
 
     const parentNode = document.querySelector(`.node[data-id="${functionId}"]`);
 
@@ -1414,6 +1664,147 @@ async function loadFunctionDetails(repoHash, functionId) {
     document.getElementById('lower-panel').innerHTML =
       '<p>Error loading function code.</p>';
   }
+}
+
+// Track if we're currently processing a click to prevent multiple highlights
+let isProcessingClick = false;
+
+// Find and highlight the component containing the clicked line
+async function findAndHighlightComponent(functionId, lineNumber) {
+  // Prevent concurrent processing
+  if (isProcessingClick) return;
+  isProcessingClick = true;
+
+  try {
+    // Get repository hash
+    const repoHash = document.querySelector('.repo-info').dataset.repoHash;
+
+    // Calculate absolute line number
+    const absoluteLineNumber = lineNumber;
+
+    // Fetch components for this function
+    const componentsResponse = await fetch(
+      `/code/api/functions/${repoHash}/${functionId}/components`
+    );
+    const components = await componentsResponse.json();
+
+    // Find the component that contains this line
+    const containingComponent = components.find(
+      (comp) =>
+        absoluteLineNumber >= comp.start_lineno &&
+        absoluteLineNumber <= comp.end_lineno
+    );
+
+    if (!containingComponent) {
+      console.log(
+        'No component found for line',
+        lineNumber,
+        'absolute line',
+        absoluteLineNumber
+      );
+      isProcessingClick = false;
+      return;
+    }
+
+    // Find and highlight the component node in the tree
+    highlightComponentNodeInTree(functionId, containingComponent.id);
+  } catch (error) {
+    console.error('Error finding component for line:', error);
+  } finally {
+    // Reset processing flag after a delay to prevent rapid clicks
+    setTimeout(() => {
+      isProcessingClick = false;
+    }, 500);
+  }
+}
+
+// Highlight the component node in the tree
+function highlightComponentNodeInTree(functionId, componentId) {
+  // First check if the function node is expanded
+  const functionNode =
+    document.querySelector(`.node[data-id="${functionId}"]`) ||
+    document.querySelector(`.node[data-function-id="${functionId}"]`);
+
+  if (!functionNode) {
+    console.log('Function node not found:', functionId);
+    return;
+  }
+
+  const functionCaret = functionNode.querySelector('.caret');
+  const functionNested = functionNode.querySelector('.nested');
+
+  if (
+    functionCaret &&
+    functionNested &&
+    !functionNested.classList.contains('active')
+  ) {
+    // Expand the function node first
+    functionCaret.click();
+  }
+
+  // Now find the component node
+  const componentNode = document.querySelector(
+    `.node[data-id="${componentId}"]`
+  );
+  if (!componentNode) {
+    console.log('Component node not found:', componentId);
+    return;
+  }
+
+  // Find the component caret and click it
+  const componentCaret = componentNode.querySelector('.caret');
+  if (componentCaret) {
+    // Clear other active nodes
+    clearActiveNodes();
+
+    // Add active class to this caret
+    componentCaret.classList.add('active-node');
+
+    // Scroll the component into view
+    componentCaret.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    // Optionally, trigger the click event to show component details
+    componentCaret.click();
+  }
+}
+
+// Initialize the code line listeners after the DOM is loaded
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initializeListeners);
+} else {
+  // DOMContentLoaded has already fired
+  initializeListeners();
+}
+
+function initializeListeners() {
+  addCodeLineListeners();
+
+  // Add a mutation observer to detect when the lower panel content changes
+  const lowerPanel = document.getElementById('lower-panel');
+
+  // Configure the observer to be less aggressive
+  const observer = new MutationObserver(function (mutations) {
+    // Only add listeners if a significant change has occurred
+    const significantChange = mutations.some(
+      (mutation) =>
+        mutation.type === 'childList' &&
+        mutation.addedNodes.length > 0 &&
+        Array.from(mutation.addedNodes).some(
+          (node) => node.classList && node.classList.contains('code-container')
+        )
+    );
+
+    if (significantChange) {
+      // Reset flag to allow re-initialization when new code is loaded
+      listenersInitialized = false;
+      addCodeLineListeners();
+    }
+  });
+
+  observer.observe(lowerPanel, {
+    childList: true,
+    subtree: true,
+  });
 }
 
 // Build HTML for function summary
@@ -1615,7 +2006,7 @@ async function displaySegmentDetails(segment, targetFunctionId) {
   // Add target info for call segments
   if (segmentType === 'call' && segment.target_function) {
     const target = segment.target_function;
-    console.log(target)
+    console.log(target);
     content += `
             <div class="segment-target">
                 <div><strong>Name:</strong> ${target.name} (${target.full_name})</div>

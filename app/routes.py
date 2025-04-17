@@ -222,6 +222,7 @@ def get_all_functions(repo_hash):
         'short_description': func.short_description
     } for func in functions])
         
+
 @bp.route('/api/functions/<repo_hash>/<function_id>')
 def get_function_details(repo_hash, function_id):
     """Get detailed information about a function including its segments"""
@@ -253,7 +254,7 @@ def get_function_details(repo_hash, function_id):
         # Add target function info for call segments
         if segment.type == 'call' and segment.target_id:
             target = Function.query.get(segment.target_id)
-            print(target.id, target.short_description)
+            # print(target.id, target.short_description)
             if target:
                 segment_data['target_function'] = {
                     'id': target.id,
@@ -290,6 +291,96 @@ def get_function_details(repo_hash, function_id):
     
     return jsonify(function_data)
 
+@bp.route('/api/functions/<repo_hash>/file')
+def get_functions_by_file(repo_hash):
+    """Get all functions in a specific file"""
+    # Verify repository exists
+    repo = Repository.query.get_or_404(repo_hash)
+    
+    # Get file path from query parameter
+    file_path = request.args.get('path') # eg "/home/webadmin/projects/code/repos/95eb1fea142ab66445473488472dcefae8aa4f5c185724c85192e00af3af37f2/run_nerf_helpers.py", models/base_model
+    if not file_path:
+        return jsonify({"error": "File path parameter is required"}), 400
+        
+    # Log the received file path for debugging
+    # current_app.logger.info(f"Finding functions for file: {file_path}")
+    
+    # Extract just the file path if it includes a full function name
+    # If file_path contains module.className.functionName, extract just the file path
+    if os.path.exists(file_path):
+        # It's already a valid file path, use it directly
+        pass
+    elif '.py:' in file_path:
+        # Handle paths that include function specification like file.py:function_name
+        file_path = file_path.split(':')[0]
+    elif file_path.startswith('/'):
+        # It's an absolute path, use it directly
+        pass
+    else:
+        # Assume it might be a module path or function name format
+        # For example, if we get "app.models.MyClass.my_function"
+        # Try to find the actual file path from the matching function
+        potential_module_path = file_path.split('.')[0]
+        
+        # Get all functions for this repo
+        all_functions = Function.query.filter_by(repo_id=repo_hash).all()
+        
+        # Look for functions with matching module name
+        for func in all_functions:
+            if func.module_name and potential_module_path in func.module_name:
+                file_path = func.file_path
+                current_app.logger.info(f"Found file path: {file_path} from module name")
+                break
+        
+    # Find functions in this file
+    functions = Function.query.filter_by(repo_id=repo_hash).all()
+    
+    # Filter functions by file path (handling different path formats)
+    matching_functions = []
+    for func in functions:
+        func_path = func.file_path
+        
+        # Try exact match
+        if func_path == file_path:
+            matching_functions.append(func)
+            continue
+            
+        # Try basename match (just the filename)
+        if os.path.basename(func_path) == os.path.basename(file_path):
+            matching_functions.append(func)
+            continue
+            
+        # Try relative/absolute path matching
+        if func_path.endswith(file_path) or file_path.endswith(func_path):
+            matching_functions.append(func)
+            continue
+            
+        # Try partial path matching for deeply nested files
+        if os.path.dirname(func_path) and os.path.dirname(file_path):
+            if os.path.dirname(func_path) in os.path.dirname(file_path) or \
+               os.path.dirname(file_path) in os.path.dirname(func_path):
+                matching_functions.append(func)
+                continue
+    
+    # Log how many functions were found
+    current_app.logger.info(f"Found {len(matching_functions)} functions in file {file_path}")
+    
+    # Sort functions by start line
+    matching_functions.sort(key=lambda f: f.lineno)
+    
+    # Convert to JSON response
+    return jsonify([{
+        'id': func.id,
+        'name': func.name,
+        'full_name': func.full_name,
+        'file_path': func.file_path,
+        'lineno': func.lineno,
+        'end_lineno': func.end_lineno,
+        'module_name': func.module_name,
+        'is_entry': func.is_entry,
+        'short_description': func.short_description
+    } for func in matching_functions])
+    
 @bp.route('/api/functions/<repo_hash>/<function_id>/components')
 def get_function_components(repo_hash, function_id):
     """Get all components for a function"""

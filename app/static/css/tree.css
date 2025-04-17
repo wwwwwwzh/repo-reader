@@ -65,6 +65,7 @@ header {
   width: 20%;
   border-right: 1px solid #eee;
   padding-right: 10px;
+  padding-left: 10px;
   overflow-y: auto;
   position: relative;
   display: flex;
@@ -237,22 +238,28 @@ header {
   background-color: rgba(187, 222, 251, 0.3);
   scroll-margin-top: 100px;
 }
-.scroll-indicator {
+
+.scroll-function-button {
   position: sticky;
   top: 0;
-  background-color: white;
   padding: 5px 0;
   z-index: 100;
   border-bottom: 1px solid #ddd;
   margin-bottom: 10px;
-}
-.scroll-indicator button {
-  background-color: #1976d2;
-  color: white;
-  border: none;
+  background-color: transparent;
+  border: 1px solid #1976d2;
+  color: #1976d2;
   padding: 5px 10px;
   border-radius: 4px;
   cursor: pointer;
+  transition: background-color 0.3s, color 0.3s;
+  font-size: 0.9em;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.scroll-function-button:hover {
+  background-color: #1976d2;
+  color: white;
 }
 .file-view-note {
   background-color: #fff3cd;
@@ -280,7 +287,7 @@ header {
   position: absolute;
   top: 0;
   right: 0;
-  width: 97%;
+  width: 100%;
   z-index: 10;
   background-color: white;
   border: 1px solid #e0e0e0;
@@ -320,6 +327,11 @@ header {
   border-radius: 4px;
   padding: 10px;
   transition: margin-top 0.3s ease;
+}
+.upper-panel, .lower-panel {
+  width: 100% !important;
+  right: 0;
+  box-sizing: border-box;
 }
 .lower-panel.expanded {
   margin-top: 46px;

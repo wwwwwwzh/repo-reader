@@ -22,12 +22,35 @@ document.addEventListener('DOMContentLoaded', () => {
   setupPanelToggling();
   loadFileStructure(repoHash);
   loadEntryFunctions(repoHash);
+  setUpScrollButton();
 });
 
-function scrollToHighlight () {
-  (document.querySelector('.strong-highlight') ||
-   document.querySelector('.function-highlight'))
-  ?.scrollIntoView({ behavior: 'smooth' });
+function scrollToHighlight() {
+  (
+    document.querySelector('.strong-highlight') ||
+    document.querySelector('.function-highlight')
+  )?.scrollIntoView({ behavior: 'smooth' });
+}
+
+function setUpScrollButton() {
+  const codeView = document.querySelector('.lower-panel');
+
+  function isInViewport(el) {
+    const { top, bottom } = el.getBoundingClientRect();
+    return bottom > 0 && top < window.innerHeight;
+  }
+
+  codeView.addEventListener('scroll', () => {
+    const functionElement = document.querySelector('.function-highlight');
+    const scrollButton = document.querySelector('.scroll-function-button');
+
+    if (!functionElement || !scrollButton) return;
+
+    // Show the button only when the highlight is completely out of view
+    scrollButton.style.display = isInViewport(functionElement)
+      ? 'none'
+      : 'block';
+  });
 }
 
 // Set up upper right panel toggling functionality
@@ -70,17 +93,25 @@ function setupFunctionSearch() {
   apiKeyLink.style.marginTop = '5px';
   apiKeyLink.style.display = 'block';
   apiKeyLink.addEventListener('click', (e) => {
-      e.preventDefault();
-      const currentKey = localStorage.getItem('groqApiKey') || '';
-      const newKey = prompt('Enter your Groq API key for better search results:', currentKey);
-      if (newKey !== null) {
-          localStorage.setItem('groqApiKey', newKey);
-          alert('API key saved! ' + (newKey ? 'Semantic search is now enabled.' : 'Semantic search is now disabled.'));
-      }
+    e.preventDefault();
+    const currentKey = localStorage.getItem('groqApiKey') || '';
+    const newKey = prompt(
+      'Enter your Groq API key for better search results:',
+      currentKey
+    );
+    if (newKey !== null) {
+      localStorage.setItem('groqApiKey', newKey);
+      alert(
+        'API key saved! ' +
+          (newKey
+            ? 'Semantic search is now enabled.'
+            : 'Semantic search is now disabled.')
+      );
+    }
   });
   searchContainer.appendChild(apiKeyLink);
 
-  // SEARCH 
+  // SEARCH
   // Function to perform the search
   async function performSearch() {
     const searchTerm = searchInput.value.trim();
@@ -1372,7 +1403,7 @@ async function loadFunctionDetails(repoHash, functionId) {
     const parentNode = document.querySelector(`.node[data-id="${functionId}"]`);
 
     if (parentNode && parentNode.dataset.type === 'function') {
-      scrollToHighlight()
+      scrollToHighlight();
     }
   } catch (error) {
     console.error('Error loading function details:', error);
@@ -1483,7 +1514,7 @@ async function displayComponentDetails(component, segments, functionId) {
                 <h3>Complete Function Code</h3>
                 ${codeView}
             `;
-            scrollToHighlight()
+      scrollToHighlight();
     } catch (error) {
       console.error('Error loading function code for component:', error);
       lowerPanel.innerHTML = '<p>Error loading function code.</p>';
@@ -1497,7 +1528,7 @@ async function displayComponentDetails(component, segments, functionId) {
                 <h3>Complete Function Code</h3>
                 ${codeView}
             `;
-            scrollToHighlight()
+      scrollToHighlight();
     } catch (error) {
       console.error('Error updating component highlighting:', error);
     }
@@ -1661,7 +1692,7 @@ async function displaySegmentDetails(segment, targetFunctionId) {
   }
 
   if (segment.type === 'call') {
-    scrollToHighlight()
+    scrollToHighlight();
   }
 }
 
@@ -1881,12 +1912,13 @@ async function buildFullFunctionCodeView(
 
     // Add a scroll indicator to jump to the function
     const scrollToFunction = `
-            <div class="scroll-indicator">
-                <button onclick="scrollToHighlight()">
-                    Scroll to Function (Line ${functionStart})
-                </button>
-            </div>
-        `;
+              <button class="scroll-function-button" onclick="(
+                  document.querySelector('.strong-highlight') ||
+                  document.querySelector('.function-highlight')
+                )?.scrollIntoView({ behavior: 'smooth' });">
+                  Scroll to Function
+              </button>
+    `;
 
     setTimeout(() => {
       Prism.highlightAll();

@@ -633,7 +633,7 @@ def extract_segments(file_path, function_info, call_segments):
             # Still try to assign a component ID if possible
             for component in func_components:
                 if (component['start_lineno'] <= segment_abs_start and 
-                    segment_abs_end <= component['end_lineno']):
+                    segment_abs_start <= component['end_lineno']):
                     logger.info(f"attaching call to component: {segment=}")
                     segment['component_id'] = component['id']
                     break

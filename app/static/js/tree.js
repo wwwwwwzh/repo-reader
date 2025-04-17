@@ -32,6 +32,8 @@ function scrollToHighlight() {
   )?.scrollIntoView({ behavior: 'smooth' });
 }
 
+window.scrollToHighlight = scrollToHighlight
+
 function setUpScrollButton() {
   const codeView = document.querySelector('.lower-panel');
 
@@ -358,7 +360,6 @@ async function searchFunctions(repoHash, searchTerm) {
   }
 }
 
-// Get all functions and prepare for semantic search
 // Get all functions and prepare for semantic search
 async function getAllFunctionsForSemanticSearch(repoHash) {
   try {
@@ -1915,10 +1916,7 @@ async function buildFullFunctionCodeView(
 
     // Add a scroll indicator to jump to the function
     const scrollToFunction = `
-              <button class="scroll-function-button" onclick="(
-                  document.querySelector('.strong-highlight') ||
-                  document.querySelector('.function-highlight')
-                )?.scrollIntoView({ behavior: 'smooth' });">
+              <button class="scroll-function-button" onclick="scrollToHighlight()">
                   Scroll to Function
               </button>
     `;

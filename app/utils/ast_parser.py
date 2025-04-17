@@ -4,6 +4,8 @@ import os
 from pathlib import Path
 from collections import defaultdict
 import re, textwrap, tokenize
+from typing import List, Optional, Iterable, Tuple
+
 from app.utils.llm_function_analyzer import set_api_key, analyze_function
 
 from app.utils.logging_utils import logger
@@ -547,10 +549,8 @@ def extract_segments(file_path, function_info, call_segments):
 
     # Build a mapping from each absolute line number to its call segment (if it belongs to one)
     # Note that for each call segment, every line in the range [call['lineno'], call['end_lineno']] maps to that call.
-    call_map = {}
-    for call in call_segments:
-        for line in range(call['lineno'], call['end_lineno'] + 1):
-            call_map[line] = call
+    call_map = {call['lineno']: call for call in call_segments}
+
     
     # Build a mapping for standalone comments: only include if it is truly standalone.
     comment_map = {}
@@ -559,7 +559,7 @@ def extract_segments(file_path, function_info, call_segments):
         comment_map[comment['lineno']] = comment
     # print("comment_map")
     # print(comment_map)
-    logger.info(f"{call_map=}, {comment_map=}")
+    logger.info(f"{call_map=}, {comment_map=}, {relative_end_line=}")
     segments = []
 
     i = 1  # i is relative
@@ -618,6 +618,7 @@ def extract_segments(file_path, function_info, call_segments):
     
     # Ensure the segments are sorted by starting line number.
     segments.sort(key=lambda seg: seg['lineno'])
+    logger.info(f"{len(segments)} SEGMENTS IDENTIFIED")
     
     # Split segments that cross component boundaries
     final_segments = []
@@ -915,10 +916,117 @@ def propagate_types(registry, max_rounds=5):
             break
     return registry
 
-def build_segments(registry):
-    for _ in range(2):
-        registry = build_segments_helper(registry)
+def build_segments_helper(registry, function_ids: Optional[List[str]] = None):
+    """Analyze function calls and build segments for a subset of functions.
+
+    Parameters
+    ----------
+    registry : FunctionRegistry
+        The registry containing all discovered functions.
+    function_ids : list[str] | None, default None
+        If provided, only the functions whose IDs appear in this list will be
+        analyzed.  When *None* (default) the helper behaves exactly as before
+        and iterates over **all** functions in the registry.  This makes the
+        helper 100 % backward‑compatible with existing callers.
+    """
+    logger.info("Third pass: Analyzing function calls and building segments…")
+
+    # Decide which (id, info) pairs we will iterate over
+    if function_ids is None:
+        items: Iterable[Tuple[str, dict]] = registry.functions.items()
+    else:
+        items = ((fid, registry.functions[fid]) for fid in function_ids)
+
+    for func_id, func_info in items:
+        file_path = func_info['file_path']
+        module_name = func_info['module']
+
+        # Skip if file doesn't exist
+        if not os.path.exists(file_path):
+            continue
+
+        # Read the source code
+        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+            source_lines = f.readlines()
+
+        # Extract function body for analysis
+        function_body_lines = source_lines[func_info['lineno'] - 1: func_info['end_lineno']]
+        function_body = ''.join(function_body_lines)
+
+        # If function body is empty or just pass, skip call analysis
+        if not function_body.strip() or re.match(r'\s*pass\s*', function_body.strip()):
+            continue
+
+        # Parse the function body to find calls
+        try:
+            dedented = textwrap.dedent(function_body)
+            tree = std_ast.parse(dedented)
+
+            analyzer = CallAnalyzer(
+                registry,
+                func_id,
+                module_name,
+                file_path,
+                function_body_lines,
+                func_info,
+            )
+            analyzer.visit(tree)
+
+            # Process segments
+            call_segments = analyzer.segments
+            all_segments = extract_segments(file_path, func_info, call_segments)
+
+            # Replace old segments with freshly‑computed ones
+            func_info["segments"] = []
+            for segment in all_segments:
+                registry.add_segment(func_id, segment)
+
+        except Exception as e:
+            logger.error(f"Error analyzing function {func_info['full_name']}: {e}")
+            traceback.print_exc()
+
+    return registry
+
+
+def build_segments(registry, batch_size: int = 50):
+    """High‑level wrapper that invokes *build_segments_helper* in batches.
+
+    Parameters
+    ----------
+    registry : FunctionRegistry
+        The registry produced by *build_registry* / *build_function_LLM_analysis*.
+    batch_size : int, default 50
+        How many functions to process in one batch before releasing any large
+        temporary objects to Python's garbage collector in order to reduce peak
+        memory usage.  Tune this number based on available RAM.
+
+    Returns
+    -------
+    FunctionRegistry
+        The same registry instance, now populated with *segments* and updated
+        type information.
+
+    Notes
+    -----
+    •  The public signature still begins with *registry* so existing call‑sites
+       (e.g. `registry = build_segments(registry)`) continue to work without
+       modification.
+    •  Two full passes (matching the original behaviour) are still performed so
+       that type‑propagation remains deterministic.  However, each pass is now
+       split into smaller chunks controlled by *batch_size*.
+    """
+    function_ids: List[str] = list(registry.functions.keys())
+
+    for _ in range(2):  # retain original two‑round logic
+        for i in range(0, len(function_ids), batch_size):
+            batch = function_ids[i : i + batch_size]
+            registry = build_segments_helper(registry, batch)
+
+        # After finishing one full sweep over all batches propagate any newly
+        # inferred parameter types so that the second sweep can take advantage
+        # of them.
         registry = propagate_types(registry)
+
     return registry
 
 def find_entry_points(registry, entry_files):

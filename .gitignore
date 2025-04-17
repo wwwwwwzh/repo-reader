@@ -8,10 +8,10 @@ cache/
 **/__pycache__/
 node_modules/
 logs/
-
-
-
-
+*.pyc/
+**/__pycache__
+**/**/__pycache__
+app/__pycache__
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -239,7 +239,7 @@ def store_registry_in_database(
 
 
 
-def build_and_store_code_tree(repo_url, entry_points, db_uri, verbose=False, reuse_registry = [False, False, False], force_push=False):
+def build_and_store_code_tree(repo_url, entry_points, db_uri, verbose=False, reuse_registry = [False, False, False], force_push=False, batch_size=50):
     """
     Main function to build a code tree and store it in the database
     
@@ -354,7 +354,7 @@ def build_and_store_code_tree(repo_url, entry_points, db_uri, verbose=False, reu
         if reuse_registry[2]:
             registry = load_registry(os.path.join(registry_dir, f"{repo_hash}_3"))
         else:
-            registry = build_segments(registry)
+            registry = build_segments(registry, batch_size = batch_size)
             save_registry(registry, os.path.join(registry_dir,f"{repo_hash}_3"))
         
         
@@ -438,6 +438,8 @@ if __name__ == "__main__":
         default=[False, False, False],
         help='reuse cache of [functions, llm analysis attached, segments attached]'
     )
+    build_parser.add_argument("--batch-size", type=int, default=50, 
+                             help="Number of functions to process in each batch during segmentation")
     build_parser.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
     
     # View command
@@ -454,7 +456,7 @@ if __name__ == "__main__":
     
     if args.command == "build":
         repo_hash = build_and_store_code_tree(
-            args.repo_url, args.entry_points, args.db_uri, args.verbose, args.reuse_registry, args.force_push
+            args.repo_url, args.entry_points, args.db_uri, args.verbose, args.reuse_registry, args.force_push, args.batch_size
         )
         
         if repo_hash:

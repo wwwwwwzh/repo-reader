@@ -1614,10 +1614,13 @@ async function displaySegmentDetails(segment, targetFunctionId) {
   // Add target info for call segments
   if (segmentType === 'call' && segment.target_function) {
     const target = segment.target_function;
+    console.log(target)
     content += `
             <div class="segment-target">
                 <div><strong>Name:</strong> ${target.name} (${target.full_name})</div>
                 <div><strong>Lines:</strong> ${target.lineno} - ${target.end_lineno}</div>
+                <div><strong>Description:</strong> ${target.short_description}</div>
+                <div><strong>Details:</strong> ${target.long_description}</div>
             </div>
         `;
   }

@@ -253,6 +253,7 @@ def get_function_details(repo_hash, function_id):
         # Add target function info for call segments
         if segment.type == 'call' and segment.target_id:
             target = Function.query.get(segment.target_id)
+            print(target.id, target.short_description)
             if target:
                 segment_data['target_function'] = {
                     'id': target.id,
@@ -262,7 +263,10 @@ def get_function_details(repo_hash, function_id):
                     'lineno': target.lineno,
                     'end_lineno': target.end_lineno,
                     'class_name': target.class_name,
-                    'module_name': target.module_name
+                    'module_name': target.module_name,
+                    'short_description': target.short_description,
+                    'input_output_description': target.input_output_description, 
+                    'long_description': target.long_description
                 }
         
         segments_data.append(segment_data)
@@ -296,7 +300,7 @@ def get_function_components(repo_hash, function_id):
         full_function_id = function_id
     
     # Get function
-    function = Function.query.get_or_404(full_function_id)
+    # function = Function.query.get_or_404(full_function_id)
     
     # Get all components for this function
     components = FuncComponent.query.filter_by(function_id=full_function_id).order_by(FuncComponent.index).all()

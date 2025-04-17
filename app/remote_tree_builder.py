@@ -5,9 +5,13 @@ import json
 from pathlib import Path
 import argparse
 from datetime import datetime, timezone
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker
+from typing import Dict, List, Set, Tuple
+
+from sqlalchemy import create_engine, text, select, delete
+from sqlalchemy.orm import sessionmaker, Session
 from dulwich.repo import Repo
+from sqlalchemy.dialects.postgresql import insert
+
 import tempfile
 import shutil
 import hashlib
@@ -45,190 +49,193 @@ def hash_url(url, algorithm='sha256'):
     # Return the hexadecimal digest of the hash
     return hash_object.hexdigest()
 
-def store_registry_in_database(registry, repo_url, repo_hash, entry_points, session):
+def _filter_payload(payload: Dict, allowed: Set[str]) -> Dict:
+    """Return a dict containing only keys that exist in `allowed`."""
+    return {k: v for k, v in payload.items() if k in allowed}
+
+
+
+# ──────────────────────────────────
+# Helper: make every row homogeneous
+# ──────────────────────────────────
+def _normalise_rows(rows: List[Dict]) -> None:
     """
-    Store the function registry in the database
-    
-    Args:
-        registry: FunctionRegistry object
-        repo_url: Repository URL
-        repo_hash: Repository hash
-        entry_points: List of entry function IDs
-        session: SQLAlchemy session
-    
-    Returns:
-        Repository object
+    Mutates *rows* in‑place so that every dict has the same keys,
+    inserting ``None`` for any missing column.
     """
-    # Create or update repository record
-    repo_record = session.query(Repository).filter_by(id=repo_hash).first()
-    if repo_record:
-        # Update existing repository
-        repo_record.url = repo_url
-        repo_record.entry_points = entry_points
-        repo_record.parsed_at = datetime.now(timezone.utc)
-    else:
-        # Create new repository record
-        repo_record = Repository(
-            id=repo_hash,
-            url=repo_url,
-            entry_points=entry_points,
-            parsed_at=datetime.now(timezone.utc)
-        )
-        session.add(repo_record)
-    
-    # Commit to ensure repository exists before adding functions
-    session.commit()
-    
-    # Store functions
-    function_count = 0
-    for func_id, func_info in registry.functions.items():
-        # Create database ID by combining repo hash and function ID
+    if not rows:
+        return
+    all_cols = {k for row in rows for k in row.keys()}
+    for row in rows:
+        for col in all_cols:
+            row.setdefault(col, None)
+
+
+def _bulk_upsert(
+    session: Session,
+    model,
+    rows: List[Dict],
+    pk_fields: Tuple[str, ...] = ("id",),
+) -> None:
+    if not rows:
+        return
+
+    _normalise_rows(rows)               # ← NEW
+
+    stmt = insert(model).values(rows)
+    update_cols = {c.name: c for c in stmt.excluded if c.name not in pk_fields}
+    stmt = stmt.on_conflict_do_update(
+        index_elements=list(pk_fields),
+        set_=update_cols,
+    )
+    session.execute(stmt)
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Main entry point
+# ──────────────────────────────────────────────────────────────────────────────
+
+def store_registry_in_database(
+    registry,
+    repo_url: str,
+    repo_hash: str,
+    entry_points: List[str],
+    session: Session,
+):
+    """
+    Persist a fully‑populated ``FunctionRegistry`` to the database in one
+    transaction – no per‑row commits, no ORM instance thrashing.
+
+    Parameters
+    ----------
+    registry
+        Your in‑memory ``FunctionRegistry``.
+    repo_url
+        GitHub/remote URL of the repository.
+    repo_hash
+        SHA‑256 (or any hash) used as repository ID.
+    entry_points
+        List of **raw** function‑IDs (the registry keys) that form the entry
+        surface of the app.
+    session
+        An **active** SQLAlchemy ``Session``.
+    """
+    ts_now = datetime.now(timezone.utc)
+
+    # ──────────────────────────────────
+    # 1. Repository (single row UPSERT)
+    # ──────────────────────────────────
+    repo_stmt = insert(Repository).values(
+        id=repo_hash,
+        url=repo_url,
+        entry_points=entry_points,
+        parsed_at=ts_now,
+    ).on_conflict_do_update(
+        index_elements=["id"],
+        set_={
+            "url": repo_url,
+            "entry_points": entry_points,
+            "parsed_at": ts_now,
+        },
+    )
+    session.execute(repo_stmt)
+
+    # Column name caches – so we filter payloads cheaply
+    fn_cols   = set(Function.__table__.columns.keys())
+    comp_cols = set(FuncComponent.__table__.columns.keys())
+    seg_cols  = set(Segment.__table__.columns.keys())
+
+    # Collections to bulk‑insert / ‑upsert
+    fn_rows, comp_rows, seg_rows, call_rows = [], [], [], []
+
+    # ──────────────────────────────────
+    # 2. Gather rows from the registry
+    # ──────────────────────────────────
+    for func_id, info in registry.functions.items():
         db_func_id = f"{repo_hash}:{func_id}"
-        
-        # Check if function is an entry point
-        is_entry = func_id in entry_points
-        
-        # Create or update function record
-        func_record = session.query(Function).filter_by(id=db_func_id).first()
-        if func_record:
-            # Update existing function
-            func_record.name = func_info['name']
-            func_record.full_name = func_info['full_name']
-            func_record.file_path = func_info['file_path']
-            func_record.lineno = func_info['lineno']
-            func_record.end_lineno = func_info['end_lineno']
-            func_record.is_entry = is_entry
-            func_record.class_name = func_info.get('class_name')
-            func_record.module_name = func_info['module']
-        else:
-            # Create new function record
-            func_record = Function(
-                id=db_func_id,
-                repo_id=repo_hash,
-                name=func_info['name'],
-                full_name=func_info['full_name'],
-                file_path=func_info['file_path'],
-                lineno=func_info['lineno'],
-                end_lineno=func_info['end_lineno'],
-                is_entry=is_entry,
-                class_name=func_info.get('class_name'),
-                module_name=func_info['module']
-            )
-            session.add(func_record)
-        
-        function_count += 1
-        
-        # Commit every 50 functions to avoid overwhelming the database
-        if function_count % 50 == 0:
-            session.commit()
-    
-    # Commit all functions
+        is_entry   = func_id in entry_points
+
+        # 2‑a) Function row
+        fn_payload = {
+            **_filter_payload(info, fn_cols),
+            "id": db_func_id,
+            "repo_id": repo_hash,
+            "is_entry": is_entry,
+        }
+        fn_rows.append(fn_payload)
+
+        # 2‑b) Components
+        for comp in info.get("components", []):
+            comp_rows.append({
+                **_filter_payload(comp, comp_cols),
+                "id": f"{db_func_id}:{comp['id']}",
+                "function_id": db_func_id,
+            })
+
+        # 2‑c) Segments
+        for idx, seg in enumerate(info.get("segments", [])):
+            row = {
+                **_filter_payload(seg, seg_cols),
+                "id": f"{db_func_id}:segment_{idx}",
+                "function_id": db_func_id,
+                "index": idx,
+            }
+
+            # Extra handling for call segments
+            if seg.get("type") == "call" and "callee_id" in seg:
+                row["target_id"] = f"{repo_hash}:{seg['callee_id']}"
+            if seg.get("component_id"):
+                row["func_component_id"] = (
+                    f"{db_func_id}:{seg['component_id']}"
+                )
+
+            # Store misc metadata in `segment_data`
+            if seg["type"] in ("call", "comment"):
+                row["segment_data"] = {
+                    "callee_name": seg.get("callee_name"),
+                    "is_standalone": seg.get("is_standalone", True),
+                }
+
+            seg_rows.append(row)
+
+        # 2‑d) Call relationships
+        for callee in info.get("callees", []):
+            call_rows.append({
+                "caller_id": db_func_id,
+                "callee_id": f"{repo_hash}:{callee}",
+                "call_count": 1,
+            })
+
+    # ──────────────────────────────────
+    # 3. Replace *children* for this repo
+    # ──────────────────────────────────
+    # (Drop & re‑insert is much simpler than upserting each component/segment.)
+    session.execute(
+        delete(FuncComponent)
+        .where(FuncComponent.id.like(f"{repo_hash}:%"))
+    )
+    session.execute(
+        delete(Segment)
+        .where(Segment.id.like(f"{repo_hash}:%"))
+    )
+    session.execute(
+        delete(FunctionCall)
+        .where(FunctionCall.caller_id.like(f"{repo_hash}:%"))
+    )
+
+    # ──────────────────────────────────
+    # 4. Bulk upserts / inserts
+    # ──────────────────────────────────
+    _bulk_upsert(session, Function, fn_rows, pk_fields=("id",))
+    if comp_rows:
+        session.bulk_insert_mappings(FuncComponent, comp_rows)
+    if seg_rows:
+        session.bulk_insert_mappings(Segment, seg_rows)
+    if call_rows:
+        session.bulk_insert_mappings(FunctionCall, call_rows)
+
     session.commit()
-    
-    # Store function components
-    component_count = 0
-    for func_id, func_info in registry.functions.items():
-        db_func_id = f"{repo_hash}:{func_id}"
-        
-        # First delete existing components for this function
-        session.query(FuncComponent).filter_by(function_id=db_func_id).delete()
-        
-        # Add components
-        for component in func_info.get('components', []):
-            component_id = f"{db_func_id}:{component['id']}"
-            
-            # Create component record
-            component_record = FuncComponent(
-                id=component_id,
-                function_id=db_func_id,
-                short_description=component['short_description'],
-                long_description=component['long_description'],
-                start_lineno=component['start_lineno'],
-                end_lineno=component['end_lineno'],
-                index=component['index']
-            )
-            session.add(component_record)
-            
-            component_count += 1
-            
-            # Commit every 50 components
-            if component_count % 50 == 0:
-                session.commit()
-    
-    # Commit all components
-    session.commit()
-    
-    # Store segments
-    segment_count = 0
-    for func_id, func_info in registry.functions.items():
-        db_func_id = f"{repo_hash}:{func_id}"
-        
-        # First delete existing segments for this function
-        session.query(Segment).filter_by(function_id=db_func_id).delete()
-        
-        # Add segments
-        for i, segment in enumerate(func_info['segments']):
-            segment_id = f"{db_func_id}:segment_{i}"
-            segment_type = segment['type']
-            
-            # For call segments, set the target ID
-            target_id = None
-            if segment_type == 'call' and 'callee_id' in segment:
-                target_id = f"{repo_hash}:{segment['callee_id']}"
-            
-            # Create segment record
-            segment_record = Segment(
-                id=segment_id,
-                function_id=db_func_id,
-                type=segment_type,
-                content=segment['content'],
-                lineno=segment['lineno'],
-                end_lineno=segment.get('end_lineno'),
-                index=i,
-                target_id=target_id,
-                # Add component ID if it exists
-                func_component_id=f"{db_func_id}:{segment.get('component_id')}" if segment.get('component_id') else None,
-                segment_data={
-                    'callee_name': segment.get('callee_name'),
-                    'is_standalone': segment.get('is_standalone', True)
-                } if segment_type in ['call', 'comment'] else None
-            )
-            session.add(segment_record)
-            
-            segment_count += 1
-            
-            # Commit every a hundred segments
-            if segment_count % 100 == 0:
-                session.commit()
-    
-    # Commit all segments
-    session.commit()
-    
-    # Store function calls (many-to-many relationships)
-    for func_id, func_info in registry.functions.items():
-        db_func_id = f"{repo_hash}:{func_id}"
-        
-        # First delete existing call relationships for this function
-        session.query(FunctionCall).filter_by(caller_id=db_func_id).delete()
-        
-        # Add call relationships
-        for callee_id in func_info['callees']:
-            db_callee_id = f"{repo_hash}:{callee_id}"
-            
-            # Create call record
-            call_record = FunctionCall(
-                caller_id=db_func_id,
-                callee_id=db_callee_id,
-                call_count=1  # We could enhance this by counting actual calls
-            )
-            session.add(call_record)
-    
-    # commit for all call relationships
-    session.commit()
-    
-    
-    
-    return repo_record
+    return session.get(Repository, repo_hash)
+
 
 
 

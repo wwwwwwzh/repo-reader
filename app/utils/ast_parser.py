@@ -46,12 +46,16 @@ class FunctionRegistry:
             "id"        : func_id,
             "name"      : func_name,
             "full_name" : full_name,
-            # "simple_name": simple_name,
             "module"    : module_name,
             "class_name": class_name,        # ← keep the class!
             "file_path" : file_path,
             "lineno"    : lineno,
             "end_lineno": end_lineno,
+            
+            'short_description': "",
+            'input_output_description': "", 
+            'long_description': "",
+
             "callers"   : [],
             "callees"   : [],
             "segments"  : [],

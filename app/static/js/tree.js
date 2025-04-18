@@ -288,6 +288,7 @@ function setupFunctionSearch() {
 }
 
 // Search functions with semantic capability
+// Search functions with semantic capability
 async function searchFunctions(repoHash, searchTerm) {
   try {
     // Check cache first
@@ -305,12 +306,41 @@ async function searchFunctions(repoHash, searchTerm) {
       const { prompt, functions, shortIdMap } =
         await getAllFunctionsForSemanticSearch(repoHash);
 
+      // Add check for prompt size here
+      const isPromptTooLarge = prompt && prompt.length > 50000;
+      
       if (prompt && functions.length > 0) {
-        const shortFunctionIds = await queryGroqForFunctions(
-          prompt,
-          searchTerm,
-          groqApiKey
-        );
+        // If prompt is too large, use a simplified prompt with just function names
+        let shortFunctionIds;
+        
+        if (isPromptTooLarge) {
+          console.log("Prompt exceeds size limit, using simplified version with just function names");
+          
+          // Create a simplified prompt with just function names and IDs
+          let simplifiedPrompt = 'I have the following functions in my codebase. Each line contains: id | function_name\n\n';
+          
+          // Build the prompt using just the function names (not full paths or descriptions)
+          Object.entries(shortIdMap).forEach(([shortId, fullId]) => {
+            const func = functions.find(f => f.id === fullId);
+            if (func) {
+              simplifiedPrompt += `${shortId} | ${func.full_name}\n`;
+            }
+          });
+          
+          // Use the simplified prompt instead
+          shortFunctionIds = await queryGroqForFunctions(
+            simplifiedPrompt,
+            searchTerm,
+            groqApiKey
+          );
+        } else {
+          // Use the original prompt for smaller repositories
+          shortFunctionIds = await queryGroqForFunctions(
+            prompt,
+            searchTerm,
+            groqApiKey
+          );
+        }
 
         if (shortFunctionIds && shortFunctionIds.length > 0) {
           // Convert short IDs back to full IDs
@@ -332,6 +362,7 @@ async function searchFunctions(repoHash, searchTerm) {
       }
     }
 
+    // Rest of the function remains unchanged...
     function simpleSearch(allFunctions, searchTerm) {
       return allFunctions.filter(
         (func) =>
@@ -364,7 +395,6 @@ async function searchFunctions(repoHash, searchTerm) {
     return [];
   }
 }
-
 // Get all functions and prepare for semantic search
 async function getAllFunctionsForSemanticSearch(repoHash) {
   try {
@@ -428,7 +458,7 @@ async function queryGroqForFunctions(prompt, query, apiKey) {
           Authorization: `Bearer ${apiKey}`,
         },
         body: JSON.stringify({
-          model: 'llama3-8b-8192',
+          model: 'llama-3.1-8b-instant',
           messages: [
             {
               role: 'system',
@@ -449,10 +479,16 @@ async function queryGroqForFunctions(prompt, query, apiKey) {
 
     const data = await response.json();
     const content = data.choices[0].message.content;
+    console.log(content)
 
     // Extract short function IDs - expecting a comma-separated list
-    const shortFunctionIds = content.split(',').map((id) => id.trim());
+    const shortFunctionIds = content.split(',').map((id) => {
+      const trimmedId = id.trim();
+      // Check if the ID is just a number, if so prefix it with func_
+      return /^\d+$/.test(trimmedId) ? `func_${trimmedId}` : trimmedId;
+    });
 
+    console.log(shortFunctionIds)
     return shortFunctionIds;
   } catch (error) {
     console.error('Error querying Groq API:', error);

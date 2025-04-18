@@ -51,6 +51,9 @@ def show_tree(repo_hash):
 @bp.route('/static/js/tree.js')
 def serve_tree_js():
     return send_from_directory(os.path.join(current_app.root_path, 'static/js'), 'tree.js')
+@bp.route('/static/js/groq_batch.js')
+def serve_groq_batch_js():
+    return send_from_directory(os.path.join(current_app.root_path, 'static/js'), 'groq_batch.js')
 
 @bp.route('/static/css/<path:filename>')
 def css_files(filename):

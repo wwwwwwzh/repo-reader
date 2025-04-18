@@ -82,7 +82,24 @@
         </div>
       </div>
     </div>
-
+    <div class="floating-chat-panel" id="qa-panel">
+      <div class="chat-header">
+        <h3>Code Repository Q&A</h3>
+        <button id="qa-toggle" class="chat-toggle-btn">_</button>
+      </div>
+      <div class="chat-messages" id="qa-messages">
+        <div class="chat-message system">
+          <div class="message-content">
+            Hello! I can answer questions about this code repository. What would you like to know?
+          </div>
+          <div class="message-time">Just now</div>
+        </div>
+      </div>
+      <div class="chat-input-container">
+        <input type="text" id="qa-input" class="chat-input" placeholder="Ask a question about this repository...">
+        <button id="qa-submit" class="chat-submit-btn">Send</button>
+      </div>
+    </div>
     <script src="/code/static/js/tree.js" type="module"></script>
   </body>
 </html>

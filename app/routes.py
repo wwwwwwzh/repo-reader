@@ -4,7 +4,7 @@ from sqlalchemy import func, desc
 from . import db
 import os
 
-bp = Blueprint('main', __name__, url_prefix='/code')
+bp = Blueprint('main', __name__)
 
 
 @bp.route('/', methods=['GET', 'POST'])
@@ -543,3 +543,7 @@ def index_repository(repo_hash):
     except Exception as e:
         current_app.logger.error(f"Error indexing repository: {str(e)}")
         return jsonify({"error": str(e)}), 500
+    
+@bp.route('/ping')
+def ping():
+    return 'pong', 200

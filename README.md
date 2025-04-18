@@ -1,3 +1,24 @@
+# Introduction
+This is a function based code reader. We often need to see what a function does by keeping in mind who called it, and what it calls. The multitude of functions in large code bases makes it difficult to keep track of a line of function calls.
+
+This tool let you start with either the entry function or any function of your choice. Each function has AI summarized components. Each component has segments of type Call, Comment and Code. Call segments are themselves functions and can be further expanded. This let you reason about the code base "ad fontes". We also provide AI powered search and general question answering. 
+
+We don't currently support custom repo parsing. If you want to add a repo, please contact me at w [at] unc [dot] edu
+
+## Demo
+
+
+https://github.com/user-attachments/assets/a10a5dfc-c720-41e3-b521-e6049775f68a
+
+
+
+
+https://github.com/user-attachments/assets/7f0ac0e6-d903-455c-8e76-ae678557248e
+
+
+
+
+# Other
 ### Version History
 0.0.1
 
@@ -77,5 +98,8 @@ RELEVANT FUNCTIONS:
 - flow3d.data.iphone_dataset.iPhoneDataset.__init__ (Score: 0.2372)
 - flow3d.vis.render_panel.populate_render_tab (Score: 0.2313)
 ```
+<<<<<<< HEAD
 
 - python -m app.remote_tree_builder build https://github.com/arklexai/Agent-First-Organization create.py:__main__ run.py:__main__ eval.py:__main__ --db-uri postgresql://codeuser:<code_password>@159.223.132.83:5432/code --verbose --reuse_registry False False False False -f
+=======
+>>>>>>> 475f9bc098f4e5304b75079f643f75914fc9620b

@@ -1,4 +1,11 @@
-# Demo
+# Introduction
+This is a function based code reader. We often need to see what a function does by keeping in mind who called it, and what it calls. The multitude of functions in large code bases makes it difficult to keep track of a line of function calls.
+
+This tool let you start with either the entry function or any function of your choice. Each function has AI summarized components. Each component has segments of type Call, Comment and Code. Call segments are themselves functions and can be further expanded. This let you reason about the code base "ad fontes". We also provide AI powered search and general question answering. 
+
+We don't currently support custom repo parsing. If you want to add a repo, please contact me at w [at] unc [dot] edu
+
+## Demo
 
 
 https://github.com/user-attachments/assets/a10a5dfc-c720-41e3-b521-e6049775f68a

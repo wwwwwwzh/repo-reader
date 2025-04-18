@@ -30,7 +30,7 @@ from app.utils.ast_parser import build_registry, build_function_LLM_analysis, bu
 from app.utils.llm_function_analyzer import set_api_key, analyze_function
 from app.utils.registry_utls import load_registry, save_registry
 from app.models import Repository, Function, Segment, FunctionCall, FuncComponent
-
+from app.utils.repository_indexer import index_repository_after_build
 
 def hash_url(url, algorithm='sha256'):
     # Convert the URL to bytes
@@ -239,7 +239,7 @@ def store_registry_in_database(
 
 
 
-def build_and_store_code_tree(repo_url, entry_points, db_uri, verbose=False, reuse_registry = [False, False, False], force_push=False, batch_size=50):
+def build_and_store_code_tree(repo_url, entry_points, db_uri, verbose=False, reuse_registry = [False, False, False, False], force_push=False, batch_size=50):
     """
     Main function to build a code tree and store it in the database
     
@@ -357,7 +357,14 @@ def build_and_store_code_tree(repo_url, entry_points, db_uri, verbose=False, reu
             registry = build_segments(registry, batch_size = batch_size)
             save_registry(registry, os.path.join(registry_dir,f"{repo_hash}_3"))
         
-        
+        if reuse_registry[3]:
+            try:
+                index_repository_after_build(repo_hash, repo_url, entry_points)
+                logger.info(f"Repository indexed for RAG: {repo_hash}")
+                return repo_hash
+            except Exception as e:
+                logger.info(f"Error indexing rag data: {str(e)}")
+                return repo_hash
         # Connect to the database
         if verbose:
             logger.info("--------------------------------------------------------------------------------\n----------------------------------------Connetting to Database----------------------------------------\n--------------------------------------------------------------------------------")
@@ -385,6 +392,10 @@ def build_and_store_code_tree(repo_url, entry_points, db_uri, verbose=False, reu
                 logger.info(f"Successfully stored data for repository {repo_url}")
                 logger.info(f"Repository hash: {repo_hash}")
             
+            
+            index_repository_after_build(repo_hash, repo_url, entry_points)
+            logger.info(f"Repository indexed for RAG: {repo_hash}")
+
             return repo_hash
             
         except Exception as e:
@@ -432,10 +443,10 @@ if __name__ == "__main__":
     build_parser.add_argument("-f", "--force_push", action="store_true", help="reclone repo even if exist")
     build_parser.add_argument(
         '--reuse_registry',
-        nargs=3,  # Expect exactly 3 arguments
+        nargs=4,  # Expect exactly 3 arguments
         type=str2bool,  # Convert the string inputs to booleans using our helper
-        metavar=('BOOL1', 'BOOL2', 'BOOL3'),
-        default=[False, False, False],
+        metavar=('BOOL1', 'BOOL2', 'BOOL3', 'BOOL4'),
+        default=[False, False, False, False],
         help='reuse cache of [functions, llm analysis attached, segments attached]'
     )
     build_parser.add_argument("--batch-size", type=int, default=50, 

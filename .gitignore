@@ -5,6 +5,7 @@ all_files*/
 scratch.*
 repos/
 cache/
+rag_db/
 **/__pycache__/
 node_modules/
 logs/

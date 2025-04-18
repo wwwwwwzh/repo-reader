@@ -474,3 +474,72 @@ def get_repository_info(repo_hash):
         'function_count': function_count,
         'name': repo.url.split('/')[-1].replace('.git', '')
     })
+
+# Add these new routes to routes.py:
+
+@bp.route('/api/qa/<repo_hash>', methods=['POST'])
+def query_repository(repo_hash):
+    """API endpoint to answer questions about a repository"""
+    # Verify repository exists
+    repo = Repository.query.get_or_404(repo_hash)
+    
+    # Get query from request
+    data = request.get_json()
+    if not data or 'query' not in data:
+        return jsonify({"error": "Query is required"}), 400
+    
+    query = data['query']
+    k = data.get('k', 5)  # Number of functions to retrieve
+    
+    # Import here to avoid circular imports
+    from app.utils.repository_qa import answer_repository_question
+    
+    try:
+        # Answer the question
+        result = answer_repository_question(repo_hash, query, k=k)
+        
+        return jsonify(result)
+    
+    except Exception as e:
+        current_app.logger.error(f"Error answering repository question: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@bp.route('/api/qa/<repo_hash>/status', methods=['GET'])
+def check_repository_index(repo_hash):
+    """API endpoint to check if a repository is indexed for QA"""
+    # Verify repository exists
+    repo = Repository.query.get_or_404(repo_hash)
+    
+    # Check if the repository has a RAG index
+    from app.utils.repository_indexer import RAG_DB_DIR
+    import os
+    
+    repo_db_dir = os.path.join(RAG_DB_DIR, repo_hash)
+    is_indexed = os.path.exists(repo_db_dir)
+    
+    return jsonify({
+        "repo_hash": repo_hash,
+        "is_indexed": is_indexed
+    })
+
+@bp.route('/api/qa/<repo_hash>/index', methods=['POST'])
+def index_repository(repo_hash):
+    """API endpoint to manually index a repository for QA"""
+    # Verify repository exists
+    repo = Repository.query.get_or_404(repo_hash)
+    
+    # Import indexer
+    from app.utils.repository_indexer import build_repository_index
+    
+    try:
+        # Build the index
+        result = build_repository_index(repo_hash)
+        
+        return jsonify({
+            "repo_hash": repo_hash,
+            "success": result
+        })
+    
+    except Exception as e:
+        current_app.logger.error(f"Error indexing repository: {str(e)}")
+        return jsonify({"error": str(e)}), 500

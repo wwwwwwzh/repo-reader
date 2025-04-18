@@ -345,25 +345,29 @@ def get_functions_by_file(repo_hash):
         
         # Try exact match
         if func_path == file_path:
+            # print(func_path)
             matching_functions.append(func)
             continue
             
         # Try basename match (just the filename)
         if os.path.basename(func_path) == os.path.basename(file_path):
+            # print(3)
             matching_functions.append(func)
             continue
             
         # Try relative/absolute path matching
         if func_path.endswith(file_path) or file_path.endswith(func_path):
+            # print(4)
             matching_functions.append(func)
             continue
             
         # Try partial path matching for deeply nested files
-        if os.path.dirname(func_path) and os.path.dirname(file_path):
-            if os.path.dirname(func_path) in os.path.dirname(file_path) or \
-               os.path.dirname(file_path) in os.path.dirname(func_path):
-                matching_functions.append(func)
-                continue
+        # if os.path.dirname(func_path) and os.path.dirname(file_path):
+        #     if os.path.dirname(func_path) in os.path.dirname(file_path) or \
+        #        os.path.dirname(file_path) in os.path.dirname(func_path):
+        #         print(5)
+        #         matching_functions.append(func)
+        #         continue
     
     # Log how many functions were found
     current_app.logger.info(f"Found {len(matching_functions)} functions in file {file_path}")
@@ -522,27 +526,27 @@ def check_repository_index(repo_hash):
         "is_indexed": is_indexed
     })
 
-@bp.route('/api/qa/<repo_hash>/index', methods=['POST'])
-def index_repository(repo_hash):
-    """API endpoint to manually index a repository for QA"""
-    # Verify repository exists
-    repo = Repository.query.get_or_404(repo_hash)
+# @bp.route('/api/qa/<repo_hash>/index', methods=['POST'])
+# def index_repository(repo_hash):
+#     """API endpoint to manually index a repository for QA"""
+#     # Verify repository exists
+#     repo = Repository.query.get_or_404(repo_hash)
     
-    # Import indexer
-    from app.utils.repository_indexer import build_repository_index
+#     # Import indexer
+#     from app.utils.repository_indexer import build_repository_index
     
-    try:
-        # Build the index
-        result = build_repository_index(repo_hash)
+#     try:
+#         # Build the index
+#         result = build_repository_index(repo_hash)
         
-        return jsonify({
-            "repo_hash": repo_hash,
-            "success": result
-        })
+#         return jsonify({
+#             "repo_hash": repo_hash,
+#             "success": result
+#         })
     
-    except Exception as e:
-        current_app.logger.error(f"Error indexing repository: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+#     except Exception as e:
+#         current_app.logger.error(f"Error indexing repository: {str(e)}")
+#         return jsonify({"error": str(e)}), 500
     
 @bp.route('/ping')
 def ping():

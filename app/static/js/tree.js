@@ -1097,6 +1097,7 @@ function updateStickyPositions() {
   });
 }
 
+// MARK: Fetch Content
 // Load function components
 async function loadFunctionComponents(repoHash, functionId, parentElement) {
   try {
@@ -1197,6 +1198,7 @@ function organizeSegmentsByComponent(segments) {
   return { componentSegments, unassignedSegments };
 }
 
+// MARK: Nodes
 // Add a component node to the tree
 function addComponentNode(
   component,
@@ -1347,6 +1349,7 @@ function addCallSegmentNode(
 
     // Display segment details
     displaySegmentDetails(segment, segment.target_function.id);
+    currentFilePath = segment.target_function.file_path
 
     // Load target function components if expanding
     if (
@@ -1403,7 +1406,7 @@ function clearActiveNodes() {
   });
 }
 
-
+// MARK: Code Interaction
 // Track if we've already added listeners to prevent duplication
 let listenersInitialized = false;
 
@@ -1575,7 +1578,7 @@ function findFunctionAtLine(repoHash, filePath, lineNumber) {
             );
             
             // Load function details
-            loadFunctionDetails(repoHash, matchingFunction.id);
+            loadFunctionDetails(repoHash, matchingFunction.id, filePath == currentFilePath);
             
             showTemporaryNotification(`Found function: ${matchingFunction.name}`, 'success');
           } else {
@@ -1643,7 +1646,7 @@ function showTemporaryNotification(message, type = 'info') {
   }, 3000);
 }
 
-async function loadFunctionDetails(repoHash, functionId) {
+async function loadFunctionDetails(repoHash, functionId, is_same_file = false) {
   try {
     // Skip reloading if it's the same function
     if (currentFunctionId === functionId) {
@@ -1684,6 +1687,7 @@ async function loadFunctionDetails(repoHash, functionId) {
 
     // Update lower panel with complete function code
     const codeView = await buildFullFunctionCodeView(functionData);
+    // TODO: if same file, don't use the full buildFullFunctionCodeView, just load the upper pannel and highlight compoennts of the function 
     lowerPanel.innerHTML = `
       <h3>Complete Function Code</h3>
       ${codeView}
@@ -1691,7 +1695,7 @@ async function loadFunctionDetails(repoHash, functionId) {
 
     const parentNode = document.querySelector(`.node[data-id="${functionId}"]`);
 
-    if (parentNode && parentNode.dataset.type === 'function') {
+    if (!is_same_file && parentNode && parentNode.dataset.type === 'function') {
       scrollToHighlight();
     }
   } catch (error) {
@@ -1845,6 +1849,7 @@ function initializeListeners() {
   });
 }
 
+//MARK: Code View
 // Build HTML for function summary
 function buildFunctionSummaryHTML(functionData) {
   let html = `
@@ -2129,7 +2134,6 @@ async function displaySegmentDetails(segment, targetFunctionId) {
   }
 }
 
-// Helper function to build a complete function code view with highlighting
 // Helper function to build a complete function code view with highlighting
 async function buildFullFunctionCodeView(
   functionData,

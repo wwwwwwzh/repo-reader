@@ -1,190 +1,56 @@
-all_files*/
-*.png
-*.dot
-.env
-scratch.*
-repos/
-cache/
-rag_db/
-**/__pycache__/
-node_modules/
-logs/
-*.pyc/
-**/__pycache__
-**/**/__pycache__
-app/__pycache__
+# Ignore everything by default
+*
 
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
-*$py.class
+# Allow these top-level files
+!.gitignore
+!.gitattributes
+!README.md
+!code_mapper.conf
+!package.json
+!package-lock.json
+!run.py
+!scratch.py
+!setup.py
+!setup_remote_database.py
+!wsgi.py
 
-# C extensions
-*.so
+# Allow app folder and its visible contents
+!app/
+!app/__init__.py
+!app/config.py
+!app/models.py
+!app/remote_tree_builder.py
+!app/routes.py
+!app/tasks.py
 
-# Distribution / packaging
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-share/python-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
+# Allow app/static and its files
+!app/static/
+!app/static/css/
+!app/static/css/tree.css
+!app/static/js/
+!app/static/js/tree.js
 
-# PyInstaller
-#  Usually these files are written by a python script from a template
-#  before PyInstaller builds the exe, so as to inject date/other infos into it.
-*.manifest
-*.spec
+# Allow app/templates and its files
+!app/templates/
+!app/templates/index.html
+!app/templates/tree.html
 
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
+# Allow app/utils and its visible contents
+!app/utils/
+!app/utils/ast_parser.py
+!app/utils/git_manager.py
+!app/utils/llm_function_analyzer.py
+!app/utils/logging_utils.py
+!app/utils/registry_utls.py
+!app/utils/repository_indexer.py
+!app/utils/repository_qa.py
 
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.py,cover
-.hypothesis/
-.pytest_cache/
-cover/
-
-# Translations
-*.mo
-*.pot
-
-# Django stuff:
-*.log
-local_settings.py
-db.sqlite3
-db.sqlite3-journal
-
-# Flask stuff:
-instance/
-.webassets-cache
-
-# Scrapy stuff:
-.scrapy
-
-# Sphinx documentation
-docs/_build/
-
-# PyBuilder
-.pybuilder/
-target/
-
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# IPython
-profile_default/
-ipython_config.py
-
-# pyenv
-#   For a library or package, you might want to ignore these files since the code is
-#   intended to run in multiple environments; otherwise, check them in:
-# .python-version
-
-# pipenv
-#   According to pypa/pipenv#598, it is recommended to include Pipfile.lock in version control.
-#   However, in case of collaboration, if having platform-specific dependencies or dependencies
-#   having no cross-platform support, pipenv may install dependencies that don't work, or not
-#   install all needed dependencies.
-#Pipfile.lock
-
-# UV
-#   Similar to Pipfile.lock, it is generally recommended to include uv.lock in version control.
-#   This is especially recommended for binary packages to ensure reproducibility, and is more
-#   commonly ignored for libraries.
-#uv.lock
-
-# poetry
-#   Similar to Pipfile.lock, it is generally recommended to include poetry.lock in version control.
-#   This is especially recommended for binary packages to ensure reproducibility, and is more
-#   commonly ignored for libraries.
-#   https://python-poetry.org/docs/basic-usage/#commit-your-poetrylock-file-to-version-control
-#poetry.lock
-
-# pdm
-#   Similar to Pipfile.lock, it is generally recommended to include pdm.lock in version control.
-#pdm.lock
-#   pdm stores project-wide configurations in .pdm.toml, but it is recommended to not include it
-#   in version control.
-#   https://pdm.fming.dev/latest/usage/project/#working-with-version-control
-.pdm.toml
-.pdm-python
-.pdm-build/
-
-# PEP 582; used by e.g. github.com/David-OConnor/pyflow and github.com/pdm-project/pdm
-__pypackages__/
-
-# Celery stuff
-celerybeat-schedule
-celerybeat.pid
-
-# SageMath parsed files
-*.sage.py
-
-# Environments
-.env
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
-
-# Spyder project settings
-.spyderproject
-.spyproject
-
-# Rope project settings
-.ropeproject
-
-# mkdocs documentation
-/site
-
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
-
-# Pyre type checker
-.pyre/
-
-# pytype static type analyzer
-.pytype/
-
-# Cython debug symbols
-cython_debug/
-
-# PyCharm
-#  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
-#  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
-#  and can be added to the global gitignore or merged into this file.  For a more nuclear
-#  option (not recommended) you can uncomment the following to ignore the entire idea folder.
-#.idea/
-
-# Ruff stuff:
-.ruff_cache/
-
-# PyPI configuration file
-.pypirc
+# Allow app/utils/database_viewer and its files
+!app/utils/database_viewer/
+!app/utils/database_viewer/database_viewer.sh
+!app/utils/database_viewer/function_call_graph.py
+!app/utils/database_viewer/function_segment_tree.py
+!app/utils/database_viewer/list_functions.py
+!app/utils/database_viewer/view_components.py
+!app/utils/database_viewer/view_segments.py
+!app/utils/database_viewer/visual_segment_tree.py

@@ -13,7 +13,7 @@
 
 0.0.5
 - patched call recognition defunct from batch segment analysis; reimplemented batch segment analysis (shape of motion has 500 functions) 
-- basic rag indexing and qa system
+- basic RAG indexing and qa system
 - fucntion search update: if too many functions, just use full name, original was to append short description
 - defaulting all groq to llama-3.1-8b-instant (128k context) and meta-llama/llama-4-scout-17b-16e-instruct
 
@@ -37,7 +37,7 @@ v0.0.4
 - python -m app.remote_tree_builder build https://github.com/vye16/shape-of-motion run_training.py:main run_rendering.py:main preproc/process_custom.py:main scripts/evaluate_iphone.py:__main__  --db-uri postgresql://codeuser:<code_password>@159.223.132.83:5432/code   --verbose --reuse_registry False False False -f
 - python -m app.remote_tree_builder build https://github.com/vye16/shape-of-motion run_training.py:main run_rendering.py:main preproc/process_custom.py:main scripts/evaluate_iphone.py:__main__   --db-uri postgresql://codeuser:<code_password>@159.223.132.83:5432/code --verbose --reuse_registry True True True -f --batch-size 10
 
-v0.0.5
+v0.0.5 (fourth boolean is for RAG)
 - python -m app.remote_tree_builder build https://github.com/wwwwwwzh/demo-repo.git main.py:main --db-uri postgresql://codeuser:<code_password>@159.223.132.83:5432/code --verbose --reuse_registry True True True True -f
 - python -m app.utils.repository_qa 3dc413bf54ba3f74e587e8b45b23172b08ffd67e1dd38dc376d3c8b8cc5163d4 "What's the main fuction"
 - python -m app.remote_tree_builder build https://github.com/wwwwwwzh/D2RF-mini run_nerf.py:__main__ --db-uri postgresql://codeuser:<code_password>@159.223.132.83:5432/code --verbose --reuse_registry True True True True -f
@@ -77,3 +77,5 @@ RELEVANT FUNCTIONS:
 - flow3d.data.iphone_dataset.iPhoneDataset.__init__ (Score: 0.2372)
 - flow3d.vis.render_panel.populate_render_tab (Score: 0.2313)
 ```
+
+- python -m app.remote_tree_builder build https://github.com/arklexai/Agent-First-Organization create.py:__main__ run.py:__main__ eval.py:__main__ --db-uri postgresql://codeuser:<code_password>@159.223.132.83:5432/code --verbose --reuse_registry False False False False -f

@@ -387,7 +387,7 @@ pre {
   overflow-x: auto;
   white-space: pre-wrap;
   word-wrap: break-word;
-  margin: 8px 0;
+  margin: 4px 0;
 }
 code {
   font-family: Consolas, Monaco, 'Andale Mono', monospace;
@@ -449,13 +449,13 @@ code {
   margin-bottom: 5px;
 }
 .segment-body {
-  padding: 5px;
+  /* padding: 5px; */
   background-color: #fff;
   border-radius: 3px;
 }
 .segment-target {
-  margin-top: 10px;
-  padding: 10px;
+  /* margin-top: 10px; */
+  padding-left: 10px;
   background-color: #ffe8e6;
   border-radius: 3px;
   border-left: 4px solid #ff8a80;
@@ -617,8 +617,8 @@ pre[class*='language-'] {
   position: fixed;
   bottom: 20px;
   left: 20px;
-  width: 350px;
-  height: 450px;
+  width: 40%;
+  height: 60%;
   background-color: white;
   border-radius: 10px;
   box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
@@ -703,6 +703,7 @@ pre[class*='language-'] {
 }
 
 .chat-message.loading {
+  width: 100px;
   align-self: flex-start;
   background-color: white;
   color: #666;
@@ -765,18 +766,32 @@ pre[class*='language-'] {
 }
 
 .chat-submit-btn {
-  background-color: #1976d2;
-  color: white;
-  border: none;
+  /* Make it a circle */
+  width: 48px;
+  height: 48px;
+  padding: 0;
   border-radius: 50%;
-  width: 32px;
-  height: 32px;
+  border: none;
+  background-color: #007BFF;
   cursor: pointer;
-  transition: background-color 0.2s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  position: relative;
+
+  /* Hide original text */
+  color: transparent;
+  font-size: 0;
 }
+
+.chat-submit-btn::before {
+  content: '↑';               /* actual up-arrow glyph */
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 24px;            /* adjust arrow size */
+  font-weight: bold;
+  color: #fff;                /* arrow color */
+}
+
 
 .chat-submit-btn:hover {
   background-color: #1565c0;

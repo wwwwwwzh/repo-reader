@@ -48,17 +48,15 @@ def show_tree(repo_hash):
     
     return render_template('tree.html', repo_hash=repo_hash, repo_name=repo_name, repo_url=repo.url)
 
-@bp.route('/static/js/tree.js')
-def serve_tree_js():
-    return send_from_directory(os.path.join(current_app.root_path, 'static/js'), 'tree.js')
-@bp.route('/static/js/groq_batch.js')
-def serve_groq_batch_js():
-    return send_from_directory(os.path.join(current_app.root_path, 'static/js'), 'groq_batch.js')
+@bp.route('/static/js/<path:filename>')
+def serve_js(filename):
+    return send_from_directory(os.path.join(current_app.root_path, 'static/js'), filename)
 
 @bp.route('/static/css/<path:filename>')
 def css_files(filename):
     return send_from_directory(os.path.join(current_app.root_path, 'static/css'), filename)
 
+# MARK: API
 @bp.route('/api/files/<repo_hash>')
 def get_file_structure(repo_hash):
     """API endpoint to get the file structure of a repository"""
@@ -479,7 +477,6 @@ def get_repository_info(repo_hash):
         'name': repo.url.split('/')[-1].replace('.git', '')
     })
 
-# Add these new routes to routes.py:
 
 @bp.route('/api/qa/<repo_hash>', methods=['POST'])
 def query_repository(repo_hash):

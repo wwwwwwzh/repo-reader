@@ -29,6 +29,11 @@
 !app/static/css/tree.css
 !app/static/js/
 !app/static/js/tree.js
+!app/static/js/code-view.js
+!app/static/js/func-tree.js
+!app/static/js/qa-panel.js
+!app/static/js/search.js
+!app/static/js/utils.js
 
 # Allow app/templates and its files
 !app/templates/

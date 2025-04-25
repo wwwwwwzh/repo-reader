@@ -305,6 +305,9 @@ class CallAnalyzer(std_ast.NodeVisitor):
             **function_info.get("param_types", {}),
             **self.var_class_map
         }
+        if self.current_class:
+            self.var_class_map.setdefault("self", self.current_class)
+            self.var_class_map.setdefault("cls",  self.current_class)
 
 
     # ..........................................................
@@ -439,18 +442,24 @@ class CallAnalyzer(std_ast.NodeVisitor):
         if fid:                                 # we already found a ctor
             return fid, finfo
 
-        # --- 5. instance‑method  (demo.run_demo) --------------------------
+        # --- 5. instance‑method  (demo.run_demo  /  self.helper) ----------
         if "." in call_name:
-            base, method = call_name.split(".", 1)
-            target_cls   = None
+            base, method_chain = call_name.split(".", 1)
 
-            if base in self.var_class_map:              # demo.run_demo
-                target_cls = self.var_class_map[base]
-            elif base in {"self", "cls"} and self.current_class:  # self.run_demo
-                target_cls = self.current_class
+            # (a) resolve what *base* refers to
+            target_cls = (
+                self.var_class_map.get(base)            # demo.run_demo
+                if base not in {"self", "cls"}           # handled next
+                else self.current_class                  # self.helper / cls.helper
+            )
 
-            if target_cls:
-                return self.registry.get_method(target_cls, method)
+            if not target_cls:
+                return None, None
+
+            # (b) only the **first** attribute after the base is the method name
+            method_name = method_chain.split(".", 1)[0]
+
+            return self.registry.get_method(target_cls, method_name)
 
         # --- 6. suffix heuristic (“helpers.validate_input”) ---------------
         for fid, finfo in self.registry.functions.items():
@@ -853,54 +862,54 @@ def build_function_LLM_analysis(registry):
             traceback.print_exc()
     return registry
             
-def build_segments_helper(registry):
-    # Third pass: Analyze function calls and build segments
-    logger.info("Third pass: Analyzing function calls and building segments...")
-    for func_id, func_info in registry.functions.items():
-        file_path = func_info['file_path']
-        module_name = func_info['module']
+# def build_segments_helper(registry):
+#     # Third pass: Analyze function calls and build segments
+#     logger.info("Third pass: Analyzing function calls and building segments...")
+#     for func_id, func_info in registry.functions.items():
+#         file_path = func_info['file_path']
+#         module_name = func_info['module']
         
         
-        # Skip if file doesn't exist
-        if not os.path.exists(file_path):
-            continue
+#         # Skip if file doesn't exist
+#         if not os.path.exists(file_path):
+#             continue
         
-        # Read the source code
-        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-            source_lines = f.readlines()
+#         # Read the source code
+#         with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+#             source_lines = f.readlines()
             
-        # Extract function body for analysis
-        function_body_lines = source_lines[func_info['lineno']-1:func_info['end_lineno']]
-        function_body = ''.join(function_body_lines)
+#         # Extract function body for analysis
+#         function_body_lines = source_lines[func_info['lineno']-1:func_info['end_lineno']]
+#         function_body = ''.join(function_body_lines)
         
-        # If function body is empty or just pass, skip call analysis
-        if not function_body.strip() or re.match(r'\s*pass\s*', function_body.strip()):
-            continue
+#         # If function body is empty or just pass, skip call analysis
+#         if not function_body.strip() or re.match(r'\s*pass\s*', function_body.strip()):
+#             continue
         
-        # Parse the function body to find calls
-        try:
-            dedented = textwrap.dedent(function_body)
-            tree = std_ast.parse(dedented)
+#         # Parse the function body to find calls
+#         try:
+#             dedented = textwrap.dedent(function_body)
+#             tree = std_ast.parse(dedented)
                 
-            analyzer = CallAnalyzer(registry, func_id, module_name, file_path, function_body_lines, func_info)
-            analyzer.visit(tree)
+#             analyzer = CallAnalyzer(registry, func_id, module_name, file_path, function_body_lines, func_info)
+#             analyzer.visit(tree)
             
-            # Process segments
-            call_segments = analyzer.segments
-            if func_info['name'] == 'main': 
-                logger.info(f"{func_info=}\n{analyzer.calls=}\n{analyzer.segments=}")
-                logger.info(f"Seg: {call_segments}")
-            all_segments = extract_segments(file_path, func_info, call_segments)
+#             # Process segments
+#             call_segments = analyzer.segments
+#             if func_info['name'] == 'main': 
+#                 logger.info(f"{func_info=}\n{analyzer.calls=}\n{analyzer.segments=}")
+#                 logger.info(f"Seg: {call_segments}")
+#             all_segments = extract_segments(file_path, func_info, call_segments)
             
-            # Add segments to the function
-            func_info["segments"] = []
-            for segment in all_segments:
-                registry.add_segment(func_id, segment)
+#             # Add segments to the function
+#             func_info["segments"] = []
+#             for segment in all_segments:
+#                 registry.add_segment(func_id, segment)
                         
-        except Exception as e:
-            print(f"Error analyzing function {func_info['full_name']}: {e}")
-            traceback.print_exc()
-    return registry
+#         except Exception as e:
+#             print(f"Error analyzing function {func_info['full_name']}: {e}")
+#             traceback.print_exc()
+#     return registry
 
 
 def propagate_types(registry, max_rounds=5):
@@ -1029,211 +1038,211 @@ def build_segments(registry, batch_size: int = 50):
 
     return registry
 
-def find_entry_points(registry, entry_files):
-    """
-    Find entry points in the registry based on a list of entry files
+# def find_entry_points(registry, entry_files):
+#     """
+#     Find entry points in the registry based on a list of entry files
     
-    Args:
-        registry: FunctionRegistry object
-        entry_files: List of file paths to treat as entries, can include
-                     file_path:function_name format
+#     Args:
+#         registry: FunctionRegistry object
+#         entry_files: List of file paths to treat as entries, can include
+#                      file_path:function_name format
         
-    Returns:
-        List of function IDs that are entry points
-    """
-    entry_points = []
+#     Returns:
+#         List of function IDs that are entry points
+#     """
+#     entry_points = []
     
-    for entry_spec in entry_files:
-        # Check if entry spec includes a function name
-        if ':' in entry_spec:
-            file_path, function_name = entry_spec.split(':', 1)
+#     for entry_spec in entry_files:
+#         # Check if entry spec includes a function name
+#         if ':' in entry_spec:
+#             file_path, function_name = entry_spec.split(':', 1)
             
-            # Handle special case for __main__
-            if function_name == '__main__':
-                for func_id, func_info in registry.functions.items():
-                    # Look for all functions in this file
-                    if os.path.basename(func_info['file_path']) == file_path:
-                        # Check if it's a main function or in a main block
-                        if (func_info['name'] == 'main' or 
-                            func_info['full_name'].endswith('.main') or
-                            '__main__' in func_info['full_name']):
-                            entry_points.append(func_id)
-                            print(f"Found entry point: {func_info['full_name']} (main)")
-            else:
-                # Find the specific function in this file
-                found = False
-                for func_id, func_info in registry.functions.items():
-                    # Match by file name and function name
-                    rel_path = os.path.basename(func_info['file_path'])
-                    if rel_path == file_path or rel_path == os.path.basename(file_path):
-                        if (func_info['name'] == function_name or 
-                            func_info['full_name'].endswith(f'.{function_name}')):
-                            entry_points.append(func_id)
-                            print(f"Found entry point: {func_info['full_name']}")
-                            found = True
+#             # Handle special case for __main__
+#             if function_name == '__main__':
+#                 for func_id, func_info in registry.functions.items():
+#                     # Look for all functions in this file
+#                     if os.path.basename(func_info['file_path']) == file_path:
+#                         # Check if it's a main function or in a main block
+#                         if (func_info['name'] == 'main' or 
+#                             func_info['full_name'].endswith('.main') or
+#                             '__main__' in func_info['full_name']):
+#                             entry_points.append(func_id)
+#                             print(f"Found entry point: {func_info['full_name']} (main)")
+#             else:
+#                 # Find the specific function in this file
+#                 found = False
+#                 for func_id, func_info in registry.functions.items():
+#                     # Match by file name and function name
+#                     rel_path = os.path.basename(func_info['file_path'])
+#                     if rel_path == file_path or rel_path == os.path.basename(file_path):
+#                         if (func_info['name'] == function_name or 
+#                             func_info['full_name'].endswith(f'.{function_name}')):
+#                             entry_points.append(func_id)
+#                             print(f"Found entry point: {func_info['full_name']}")
+#                             found = True
                 
-                if not found:
-                    print(f"Warning: Could not find function {function_name} in {file_path}")
-        else:
-            # Treat the whole file as an entry point
-            file_path = entry_spec
-            file_count = 0
+#                 if not found:
+#                     print(f"Warning: Could not find function {function_name} in {file_path}")
+#         else:
+#             # Treat the whole file as an entry point
+#             file_path = entry_spec
+#             file_count = 0
             
-            for func_id, func_info in registry.functions.items():
-                rel_path = os.path.basename(func_info['file_path'])
-                if rel_path == file_path or rel_path == os.path.basename(file_path):
-                    entry_points.append(func_id)
-                    print(f"Found entry point: {func_info['full_name']}")
-                    file_count += 1
+#             for func_id, func_info in registry.functions.items():
+#                 rel_path = os.path.basename(func_info['file_path'])
+#                 if rel_path == file_path or rel_path == os.path.basename(file_path):
+#                     entry_points.append(func_id)
+#                     print(f"Found entry point: {func_info['full_name']}")
+#                     file_count += 1
             
-            if file_count == 0:
-                print(f"Warning: Could not find any functions in {file_path}")
+#             if file_count == 0:
+#                 print(f"Warning: Could not find any functions in {file_path}")
     
-    return entry_points
+#     return entry_points
 
-def build_tree_from_function(registry, function_id, max_depth=3, current_depth=0):
-    """
-    Build a tree from a function node with segments
+# def build_tree_from_function(registry, function_id, max_depth=3, current_depth=0):
+#     """
+#     Build a tree from a function node with segments
     
-    Args:
-        registry: FunctionRegistry object
-        function_id: ID of the function to use as root
-        max_depth: Maximum depth of the tree (excluding segments)
-        current_depth: Current depth (for recursion)
+#     Args:
+#         registry: FunctionRegistry object
+#         function_id: ID of the function to use as root
+#         max_depth: Maximum depth of the tree (excluding segments)
+#         current_depth: Current depth (for recursion)
         
-    Returns:
-        Tree structure
-    """
-    if current_depth > max_depth or function_id is None:
-        return None
+#     Returns:
+#         Tree structure
+#     """
+#     if current_depth > max_depth or function_id is None:
+#         return None
     
-    # Get function info
-    func_info = registry.get_function_by_id(function_id)
-    if not func_info:
-        return None
+#     # Get function info
+#     func_info = registry.get_function_by_id(function_id)
+#     if not func_info:
+#         return None
     
-    # Create node for this function
-    node = {
-        'id': function_id,
-        'name': func_info['name'],
-        'full_name': func_info['full_name'],
-        'file_path': func_info['file_path'],
-        'segments': func_info['segments'],
-        'children': []
-    }
+#     # Create node for this function
+#     node = {
+#         'id': function_id,
+#         'name': func_info['name'],
+#         'full_name': func_info['full_name'],
+#         'file_path': func_info['file_path'],
+#         'segments': func_info['segments'],
+#         'children': []
+#     }
     
-    # Add callees as children
-    if current_depth < max_depth:
-        for callee_id in func_info['callees']:
-            child_node = build_tree_from_function(
-                registry, callee_id, max_depth, current_depth + 1
-            )
-            if child_node:
-                node['children'].append(child_node)
+#     # Add callees as children
+#     if current_depth < max_depth:
+#         for callee_id in func_info['callees']:
+#             child_node = build_tree_from_function(
+#                 registry, callee_id, max_depth, current_depth + 1
+#             )
+#             if child_node:
+#                 node['children'].append(child_node)
     
-    return node
+#     return node
 
 
-def print_tree(node, max_level=2, current_level=0, prefix=""):
-    """
-    Print a tree with levels
+# def print_tree(node, max_level=2, current_level=0, prefix=""):
+#     """
+#     Print a tree with levels
     
-    Args:
-        node: Tree node to print
-        max_level: Maximum level to print (0=root, 1=segments, 2=callee functions, etc.)
-        current_level: Current level (for recursion)
-        prefix: Prefix string for indentation
-    """
-    if node is None:
-        return
+#     Args:
+#         node: Tree node to print
+#         max_level: Maximum level to print (0=root, 1=segments, 2=callee functions, etc.)
+#         current_level: Current level (for recursion)
+#         prefix: Prefix string for indentation
+#     """
+#     if node is None:
+#         return
     
-    # Print the current node
-    print(f"{prefix}└── {node['name']} ({node['full_name']})")
+#     # Print the current node
+#     print(f"{prefix}└── {node['name']} ({node['full_name']})")
     
-    # If we're at the max level, stop
-    if current_level >= max_level:
-        return
+#     # If we're at the max level, stop
+#     if current_level >= max_level:
+#         return
     
-    # Print segments at level 1
-    if current_level + 1 <= max_level and 'segments' in node:
-        segment_prefix = prefix + "    "
-        for i, segment in enumerate(node['segments']):
-            seg_type = segment['type']
-            content = segment['content']
+#     # Print segments at level 1
+#     if current_level + 1 <= max_level and 'segments' in node:
+#         segment_prefix = prefix + "    "
+#         for i, segment in enumerate(node['segments']):
+#             seg_type = segment['type']
+#             content = segment['content']
             
-            # Shorten long content
-            if len(content) > 100:
-                content = content[:97] + "..."
+#             # Shorten long content
+#             if len(content) > 100:
+#                 content = content[:97] + "..."
             
-            # Print segment
-            if seg_type == 'call' and 'callee_name' in segment:
-                print(f"{segment_prefix}├── [CALL] {segment['callee_name']}: {content}")
-            else:
-                print(f"{segment_prefix}├── [{seg_type.upper()}] {content}")
+#             # Print segment
+#             if seg_type == 'call' and 'callee_name' in segment:
+#                 print(f"{segment_prefix}├── [CALL] {segment['callee_name']}: {content}")
+#             else:
+#                 print(f"{segment_prefix}├── [{seg_type.upper()}] {content}")
     
-    # Print children at level 2+
-    if current_level + 2 <= max_level and 'children' in node:
-        child_prefix = prefix + "    "
-        for child in node['children']:
-            print_tree(child, max_level, current_level + 2, child_prefix)
+#     # Print children at level 2+
+#     if current_level + 2 <= max_level and 'children' in node:
+#         child_prefix = prefix + "    "
+#         for child in node['children']:
+#             print_tree(child, max_level, current_level + 2, child_prefix)
 
 
-def print_function_info(registry, function_id):
-    """
-    Print detailed information about a function
+# def print_function_info(registry, function_id):
+#     """
+#     Print detailed information about a function
     
-    Args:
-        registry: FunctionRegistry object
-        function_id: ID of the function to print
-    """
-    func_info = registry.get_function_by_id(function_id)
-    if not func_info:
-        print(f"Function {function_id} not found")
-        return
+#     Args:
+#         registry: FunctionRegistry object
+#         function_id: ID of the function to print
+#     """
+#     func_info = registry.get_function_by_id(function_id)
+#     if not func_info:
+#         print(f"Function {function_id} not found")
+#         return
     
-    print("=" * 60)
-    print(f"FUNCTION: {func_info['full_name']}")
-    print(f"ID: {function_id}")
-    print(f"File: {func_info['file_path']}")
-    print(f"Lines: {func_info['lineno']} - {func_info['end_lineno']}")
+#     print("=" * 60)
+#     print(f"FUNCTION: {func_info['full_name']}")
+#     print(f"ID: {function_id}")
+#     print(f"File: {func_info['file_path']}")
+#     print(f"Lines: {func_info['lineno']} - {func_info['end_lineno']}")
     
-    # Print callers
-    print("\nCALLERS:")
-    if func_info['callers']:
-        for caller_id in func_info['callers']:
-            caller = registry.get_function_by_id(caller_id)
-            if caller:
-                print(f"  - {caller['full_name']}")
-    else:
-        print("  None")
+#     # Print callers
+#     print("\nCALLERS:")
+#     if func_info['callers']:
+#         for caller_id in func_info['callers']:
+#             caller = registry.get_function_by_id(caller_id)
+#             if caller:
+#                 print(f"  - {caller['full_name']}")
+#     else:
+#         print("  None")
     
-    # Print callees
-    print("\nCALLEES:")
-    if func_info['callees']:
-        for callee_id in func_info['callees']:
-            callee = registry.get_function_by_id(callee_id)
-            if callee:
-                print(f"  - {callee['full_name']}")
-    else:
-        print("  None")
+#     # Print callees
+#     print("\nCALLEES:")
+#     if func_info['callees']:
+#         for callee_id in func_info['callees']:
+#             callee = registry.get_function_by_id(callee_id)
+#             if callee:
+#                 print(f"  - {callee['full_name']}")
+#     else:
+#         print("  None")
     
-    # Print segments
-    print("\nSEGMENTS:")
-    for i, segment in enumerate(func_info['segments']):
-        seg_type = segment['type']
-        content = segment['content']
-        print(f"\n  {i+1}. [{seg_type.upper()}]")
-        print(f"     Line: {segment['lineno']}")
-        if seg_type == 'call' and 'callee_name' in segment:
-            print(f"     Calls: {segment['callee_name']}")
-        print("-" * 40)
+#     # Print segments
+#     print("\nSEGMENTS:")
+#     for i, segment in enumerate(func_info['segments']):
+#         seg_type = segment['type']
+#         content = segment['content']
+#         print(f"\n  {i+1}. [{seg_type.upper()}]")
+#         print(f"     Line: {segment['lineno']}")
+#         if seg_type == 'call' and 'callee_name' in segment:
+#             print(f"     Calls: {segment['callee_name']}")
+#         print("-" * 40)
         
-        # Print the content with line numbers
-        lines = content.split('\n')
-        for j, line in enumerate(lines):
-            print(f"     {j+1:3d} | {line}")
+#         # Print the content with line numbers
+#         lines = content.split('\n')
+#         for j, line in enumerate(lines):
+#             print(f"     {j+1:3d} | {line}")
     
-    print("=" * 60)
+#     print("=" * 60)
 
 
 # Example usage:

@@ -55,7 +55,7 @@ header {
   height: calc(100vh - 120px);
 }
 .file-tree-nav {
-  width: 20%;
+  width: 10%;
   border-right: 1px solid #eee;
   padding-right: 10px;
   overflow-y: auto;
@@ -148,6 +148,8 @@ header {
   border-radius: 4px;
   padding: 8px;
   display: none;
+  max-height: 50px;
+  overflow-y: scroll;
 }
 
 .search-history-title {
@@ -195,12 +197,12 @@ header {
 /* Pin button styling */
 .pin-button {
   position: absolute;
-  right: 5px;
-  top: 5px;
+  right: 8px;
+  top: 8px;
   cursor: pointer;
   font-size: 14px;
-  width: 16px;
-  height: 16px;
+  width: 12px;
+  height: 12px;
   display: inline-block;
   border: 2px solid #555;
   border-radius: 50% 50% 50% 0;
@@ -276,6 +278,7 @@ header {
 }
 
 .function-preview {
+  min-width: 60%;
   width: 75%;
   padding-left: 10px;
   display: flex;
@@ -597,12 +600,15 @@ pre[class*='language-'] {
 
 /* Remove button styling */
 .remove-btn {
+  position: absolute;
+  right: 30px;
+  top: 5px;
+  display: inline-block;
   background-color: transparent;
   border: none;
   color: #f44336;
   cursor: pointer;
-  font-size: 14px;
-  margin-left: 5px;
+  font-size: 22px;
 }
 
 /* Empty state message */
@@ -630,7 +636,38 @@ pre[class*='language-'] {
 }
 
 .floating-chat-panel.collapsed {
-  height: 45px;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background-color: #1976d2;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+}
+
+/* Hide all content when collapsed except for the icon */
+.floating-chat-panel.collapsed .chat-messages,
+.floating-chat-panel.collapsed .chat-input-container,
+.floating-chat-panel.collapsed .chat-header h3 {
+  display: none;
+}
+
+.chat-icon {
+  color: white;
+  font-size: 24px;
+  display: none;
+}
+
+/* Show icon only when collapsed */
+.floating-chat-panel.collapsed .chat-icon {
+  display: block;
+}
+
+/* Add hover effect for the circle */
+.floating-chat-panel.collapsed:hover {
+  transform: scale(1.05);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
 }
 
 .chat-header {
@@ -823,4 +860,71 @@ pre[class*='language-'] {
 .floating-chat-panel.dragging {
   opacity: 0.8;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+}
+
+/* Modify the custom-function-nav to hold both sections */
+.custom-function-nav {
+  width: 20%;
+  border-right: 1px solid #eee;
+  padding-right: 10px;
+  padding-left: 10px;
+  overflow-y: auto;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Adjust entry functions section */
+.entry-functions-section {
+  margin-bottom: 15px;
+  border-bottom: 1px dashed #eee;
+  padding-bottom: 10px;
+  max-height: 40%;
+  overflow-y: scroll;
+}
+
+.entry-functions-section h4 {
+  margin: 5px 0;
+  font-size: 0.9em;
+  color: #555;
+}
+
+/* Make tree-nav work inside custom-function-nav */
+.tree-nav {
+  width: 100%;
+  border-right: none;
+  padding-right: 0;
+  overflow-y: visible;
+  position: static;
+  max-height: 35vh;
+  overflow-y: auto;
+}
+
+.custom-function-nav h3, .file-tree-nav h3 {
+  margin: 0;
+}
+
+/* Adjust custom functions list heading */
+.custom-function-nav > h4 {
+  margin: 5px 0;
+  font-size: 0.9em;
+  color: #555;
+}
+
+/* Make custom-functions-list take remaining space */
+.custom-functions-list {
+  overflow-y: auto;
+  flex-grow: 1;
+  /* max-height: 35vh; */
+}
+
+/* Keep search-container at the top */
+.search-container {
+  position: sticky;
+  top: 0;
+  background-color: white;
+  padding: 10px 0;
+  z-index: 100;
+  border-bottom: 1px solid #ddd;
+  margin-bottom: 10px;
 }

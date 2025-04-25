@@ -34,9 +34,10 @@
           <h3>File Structure</h3>
           <div id="loading-file-tree" class="loading"></div>
         </div>
-
+      
+        <!-- This div combines both navigation sections while preserving original IDs -->
         <div class="custom-function-nav" id="custom-function-nav">
-          <h3>Function Search</h3>
+          <h3>Functions</h3>
           <div class="search-container">
             <div class="search-form">
               <input
@@ -49,14 +50,20 @@
             </div>
             <div id="search-results" class="search-results"></div>
           </div>
+          
+          <!-- Add entry functions section here but preserve tree ID -->
+          <div class="entry-functions-section">
+            <h4>Entry Functions</h4>
+            <div id="tree" class="tree-nav">
+              <div id="loading-tree" class="loading"></div>
+            </div>
+          </div>
+          
+          <!-- Keep custom functions list with exact same ID -->
+          <h4>Custom Functions</h4>
           <div class="custom-functions-list" id="custom-functions-list">
             <div class="empty-state">Search for functions to add them here</div>
           </div>
-        </div>
-
-        <div class="tree-nav" id="tree">
-          <h3>Function Components</h3>
-          <div id="loading-tree" class="loading"></div>
         </div>
 
         <div class="function-preview" id="function-preview">

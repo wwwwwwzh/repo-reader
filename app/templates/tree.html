@@ -9,6 +9,7 @@
     <link href="/code/static/css/tree.css" rel="stylesheet" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
   </head>
   <body>
     <header>
@@ -29,7 +30,7 @@
         <span>Function Tree</span>
       </div>
 
-      <div class="tree-container">
+      <div class="main-container">
         <div class="file-tree-nav" id="file-tree">
           <h3>File Structure</h3>
           <div id="loading-file-tree" class="loading"></div>
@@ -107,11 +108,15 @@
         <button id="qa-submit" class="chat-submit-btn">Send</button>
       </div>
     </div>
+    <button id="show-interactive-tree" class="tree-toggle-button">
+      Show Function Tree
+    </button>
     <script src="/code/static/js/utils.js"></script>
     <script src="/code/static/js/search.js"></script>
     <script src="/code/static/js/qa-panel.js"></script>
     <script src="/code/static/js/func-tree.js"></script>
     <script src="/code/static/js/code-view.js"></script>
+    <script src="/code/static/js/interactive-tree.js"></script>
     <script src="/code/static/js/tree.js"></script>
   </body>
 </html>

@@ -440,6 +440,21 @@ function addToCustomFunctionsList(functionId, functionName, fullName) {
     return;
   }
 
+  // Check if this function should be pinned
+  const shouldPin = pinnedFunctions.includes(functionId);
+  
+  // If not pinned, remove all unpinned functions
+  if (!shouldPin) {
+    // Find and remove all unpinned functions
+    const unpinnedFunctions = document.querySelectorAll('.custom-function-item');
+    unpinnedFunctions.forEach(item => {
+      const itemId = item.dataset.id;
+      if (!pinnedFunctions.includes(itemId)) {
+        item.remove();
+      }
+    });
+  }
+
   // Create function node container
   const functionNode = document.createElement('div');
   functionNode.className = 'node';
@@ -561,7 +576,6 @@ function addToCustomFunctionsList(functionId, functionName, fullName) {
   // Add to the list
   customFunctionsList.appendChild(customFunctionItem);
 }
-
 // Toggle pin status for a function
 function togglePinFunction(functionId, pinButton) {
   const isPinned = pinnedFunctions.includes(functionId);

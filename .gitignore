@@ -34,6 +34,7 @@
 !app/static/js/qa-panel.js
 !app/static/js/search.js
 !app/static/js/utils.js
+!app/static/js/interactive-tree.js
 
 # Allow app/templates and its files
 !app/templates/

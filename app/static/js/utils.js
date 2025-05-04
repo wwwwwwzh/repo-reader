@@ -213,3 +213,55 @@ function addFunctionLinkHandlers() {
     });
   });
 }
+function makeDraggable(element, handle) {
+  // disable text-selection and native dragging
+  element.style.userSelect    = 'none';
+  element.style.touchAction   = 'none';
+  element.draggable           = false;
+  element.ondragstart         = () => false;
+  element.style.position      = 'fixed';
+
+  // ensure no CSS transitions get in the way
+  element.style.transition    = 'none';
+
+  // which part fires the drag
+  const grip = handle || element;
+  grip.style.cursor = 'move';
+
+  let offsetX = 0, offsetY = 0;
+
+  grip.addEventListener('mousedown', onDown);
+
+  function onDown(e) {
+    e.preventDefault();
+
+    // compute pointer→element offset
+    const rect = element.getBoundingClientRect();
+    offsetX = e.clientX - rect.left;
+    offsetY = e.clientY - rect.top;
+
+    // attach move/up handlers
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup',   onUp);
+  }
+
+  function onMove(e) {
+    e.preventDefault();
+
+    // new top-left so that cursor stays at the same spot on the element
+    let x = e.clientX - offsetX;
+    let y = e.clientY - offsetY;
+
+    // clamp inside viewport
+    x = Math.max(0, Math.min(x, window.innerWidth  - element.offsetWidth));
+    y = Math.max(0, Math.min(y, window.innerHeight - element.offsetHeight));
+
+    element.style.left = x + 'px';
+    element.style.top  = y + 'px';
+  }
+
+  function onUp() {
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup',   onUp);
+  }
+}

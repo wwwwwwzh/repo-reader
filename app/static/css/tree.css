@@ -50,7 +50,7 @@ header {
 .breadcrumb a:hover {
   text-decoration: underline;
 }
-.tree-container {
+.main-container {
   display: flex;
   height: calc(100vh - 120px);
 }
@@ -256,7 +256,7 @@ header {
   cursor: pointer;
   transition: background-color 0.3s, color 0.3s;
   font-size: 0.9em;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
 
 .scroll-function-button:hover {
@@ -331,7 +331,8 @@ header {
   padding: 10px;
   transition: margin-top 0.3s ease;
 }
-.upper-panel, .lower-panel {
+.upper-panel,
+.lower-panel {
   width: 100% !important;
   right: 0;
   box-sizing: border-box;
@@ -500,7 +501,7 @@ code {
   font-weight: bold;
   font-size: small;
   max-height: 25px;
-  overflow:scroll;
+  overflow: scroll;
 }
 .node-segment-comment {
   color: #6d4c41;
@@ -720,8 +721,14 @@ pre[class*='language-'] {
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .chat-message.user {
@@ -736,7 +743,7 @@ pre[class*='language-'] {
   background-color: white;
   color: #333;
   border-bottom-left-radius: 5px;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
 .chat-message.loading {
@@ -809,7 +816,7 @@ pre[class*='language-'] {
   padding: 0;
   border-radius: 50%;
   border: none;
-  background-color: #007BFF;
+  background-color: #007bff;
   cursor: pointer;
   position: relative;
 
@@ -819,16 +826,15 @@ pre[class*='language-'] {
 }
 
 .chat-submit-btn::before {
-  content: '↑';               /* actual up-arrow glyph */
+  content: '↑'; /* actual up-arrow glyph */
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  font-size: 24px;            /* adjust arrow size */
+  font-size: 24px; /* adjust arrow size */
   font-weight: bold;
-  color: #fff;                /* arrow color */
+  color: #fff; /* arrow color */
 }
-
 
 .chat-submit-btn:hover {
   background-color: #1565c0;
@@ -850,10 +856,20 @@ pre[class*='language-'] {
 }
 
 @keyframes dots {
-  0%, 20% { content: '.'; }
-  40% { content: '..'; }
-  60% { content: '...'; }
-  80%, 100% { content: ''; }
+  0%,
+  20% {
+    content: '.';
+  }
+  40% {
+    content: '..';
+  }
+  60% {
+    content: '...';
+  }
+  80%,
+  100% {
+    content: '';
+  }
 }
 
 /* Make panel draggable */
@@ -900,7 +916,8 @@ pre[class*='language-'] {
   overflow-y: auto;
 }
 
-.custom-function-nav h3, .file-tree-nav h3 {
+.custom-function-nav h3,
+.file-tree-nav h3 {
   margin: 0;
 }
 
@@ -927,4 +944,332 @@ pre[class*='language-'] {
   z-index: 100;
   border-bottom: 1px solid #ddd;
   margin-bottom: 10px;
+}
+
+/* MARK: interactive tree  */
+.tree-toggle-button {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  padding: 10px 15px;
+  background-color: #1976d2;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+  z-index: 999;
+  font-size: 0.9em;
+}
+
+.tree-toggle-button:hover {
+  background-color: #1565c0;
+}
+
+/* Hide the button when the tree panel is visible */
+.tree-panel-visible .tree-toggle-button {
+  display: none;
+}
+
+.floating-tree-panel {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 45%;
+  height: 60%;
+  background-color: white;
+  border-radius: 10px;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  z-index: 1000;
+  transition: all 0.3s ease;
+  overflow: hidden;
+}
+
+.floating-tree-panel.collapsed {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background-color: #1976d2;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+}
+
+/* Hide all content when collapsed except for the icon */
+.floating-tree-panel.collapsed .tree-controls,
+.floating-tree-panel.collapsed .tree-container,
+.floating-tree-panel.collapsed .tree-header h3 {
+  display: none;
+}
+
+.tree-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 15px;
+  background-color: #1976d2;
+  color: white;
+  cursor: move;
+}
+
+.tree-header h3 {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: normal;
+}
+
+.tree-header-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.tree-header-controls button {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 1.2em;
+  cursor: pointer;
+  width: 20px;
+  height: 20px;
+  line-height: 20px;
+  text-align: center;
+  padding: 0;
+}
+
+.tree-container {
+  flex-grow: 1;
+  overflow: auto;
+  padding: 10px;
+  background-color: #f9f9f9;
+  position: relative;
+}
+
+
+#interactive-tree-viz {
+  height: 100%;
+}
+
+.tree-controls {
+  padding: 10px;
+  border-top: 1px solid #eee;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.tree-depth-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#tree-layout-select {
+  padding: 5px;
+  border-radius: 4px;
+  border: 1px solid #ddd;
+}
+
+#tree-expansion-depth {
+  width: 100px;
+}
+
+/* D3 node styles */
+.tree-node {
+  cursor: pointer;
+}
+
+.tree-node circle {
+  fill: #fff;
+  stroke: #1976d2;
+  stroke-width: 1.5px;
+}
+
+.tree-node:hover circle {
+  fill: #e3f2fd;
+}
+
+.tree-node text {
+  font: 12px sans-serif;
+  fill: #333;
+}
+
+.tree-link {
+  fill: none;
+  stroke: #999;
+  stroke-width: 1px;
+}
+
+.tree-node.entry-point circle {
+  fill: #bbdefb;
+  stroke: #0d47a1;
+  stroke-width: 2px;
+}
+
+.tree-node.expanded circle {
+  fill: #e3f2fd;
+}
+
+.tree-node.highlight circle {
+  fill: #ffecb3;
+  stroke: #ff8f00;
+  stroke-width: 2px;
+}
+
+/* Dragging class for panel */
+.floating-tree-panel.dragging {
+  opacity: 0.8;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+}
+
+/* CSS additions for enhanced interactive tree */
+
+/* Improved node styling with dual labels */
+.node-label-name {
+  font-weight: bold;
+  font-size: 10px;
+  fill: #0d47a1;
+}
+
+.node-label-path {
+  font-size: 8px;
+  fill: #666;
+}
+
+/* Highlighted node and subnodes */
+.tree-node.highlight circle {
+  fill: #ffecb3;
+  stroke: #ff8f00;
+  stroke-width: 2.5px;
+  animation: pulse 1.5s infinite alternate;
+}
+
+.tree-node.subnode-highlight circle {
+  fill: #fff8e1;
+  stroke: #ffb300;
+  stroke-width: 1.5px;
+}
+
+/* Pulse animation for highlighted nodes */
+@keyframes pulse {
+  from {
+    stroke-width: 2.5px;
+    r: 5;
+  }
+  to {
+    stroke-width: 3px;
+    r: 6;
+  }
+}
+
+/* Arrow styling */
+#arrowhead, #radial-arrowhead {
+  fill: #999;
+}
+
+/* Empty state and error messages */
+.tree-empty-state, .tree-error {
+  padding: 20px;
+  text-align: center;
+  color: #666;
+}
+
+.tree-error {
+  color: #f44336;
+  border: 1px solid #ffcdd2;
+  background-color: #ffebee;
+  border-radius: 4px;
+}
+
+/* Circular reference styling */
+.tree-node.circular circle {
+  fill: #ffcdd2;
+  stroke: #f44336;
+}
+
+/* Tooltips with descriptions */
+.tree-node title {
+  pointer-events: none;
+}
+
+/* First interaction highlight */
+.tree-node.first-interaction {
+  animation: highlight-first 1s;
+}
+
+@keyframes highlight-first {
+  0% { 
+    opacity: 0.5; 
+  }
+  100% { 
+    opacity: 1; 
+  }
+}
+
+/* Add extra padding to tree container for better scrolling */
+.tree-container {
+  padding: 20px;
+}
+
+/* Make the tree controls more visually appealing */
+.tree-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 15px;
+  background-color: #f5f5f5;
+  border-top: 1px solid #e0e0e0;
+}
+
+#tree-layout-select {
+  padding: 6px 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background-color: white;
+  font-size: 0.9em;
+}
+
+.tree-depth-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+#tree-expansion-depth {
+  width: 100px;
+}
+
+/* Improve the appearance of the loader */
+.tree-loader {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: 15px 20px;
+  background-color: rgba(255, 255, 255, 0.9);
+  border-radius: 5px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.tree-loader:after {
+  content: '';
+  width: 20px;
+  height: 20px;
+  margin-left: 10px;
+  border: 2px solid #bbdefb;
+  border-radius: 50%;
+  border-top-color: #1976d2;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
